@@ -2,9 +2,10 @@
 name = "stm32h5xx-hal"
 version = "0.0.0"
 edition = "2021"
-authors = [
-    "Edwin Svensson <stm32h5xxhal@olback.net>"
-]
+authors = ["Edwin Svensson <stm32h5xxhal@olback.net>"]
+homepage = "https://github.com/olback/stm32h5xx-hal"
+repository = "https://github.com/olback/stm32h5xx-hal"
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
