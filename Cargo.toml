@@ -6,6 +6,11 @@ authors = ["Edwin Svensson <stm32h5xxhal@olback.net>"]
 homepage = "https://github.com/olback/stm32h5xx-hal"
 repository = "https://github.com/olback/stm32h5xx-hal"
 readme = "README.md"
+rust-version = "1.65"
+categories = ["embedded", "hardware-support", "no-std"]
+description = "Hardware Abstraction Layer implementation for STM32H5 series microcontrollers"
+keywords = ["arm", "cortex-m", "stm32h5xx", "hal", "embedded-hal"]
+license = "0BSD"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
