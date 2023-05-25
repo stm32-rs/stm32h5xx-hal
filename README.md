@@ -20,10 +20,10 @@ every single model.
 
 | Part      | Supported | RM | Dev board |
 | --------- | --------- | -- | --------- |
-| stm32h503 | 🚧 (WIP)  | [RM0492](https://www.st.com/resource/en/reference_manual/rm0492-stm32h503-line-armbased-32bit-mcus-stmicroelectronics.pdf) | [Nucleo H503RB](https://www.st.com/en/evaluation-tools/nucleo-h503rb.html) |
-| stm32h562 | ❌*       | [RM0481](https://www.st.com/resource/en/reference_manual/rm0481-stm32h563h573-and-stm32h562-armbased-32bit-mcus-stmicroelectronics.pdf) |  |
-| stm32h563 | ❌*       | [RM0481](https://www.st.com/resource/en/reference_manual/rm0481-stm32h563h573-and-stm32h562-armbased-32bit-mcus-stmicroelectronics.pdf) | [Nucleo H563ZI](https://www.st.com/en/evaluation-tools/nucleo-h563zi.html) |
-| stm32h573 | ❌*       | [RM0481](https://www.st.com/resource/en/reference_manual/rm0481-stm32h563h573-and-stm32h562-armbased-32bit-mcus-stmicroelectronics.pdf) |  |
+| stm32h503 | 🚧 (WIP)  | [RM0492](https://www.st.com/resource/en/reference_manual/rm0492-stm32h503-line-armbased-32bit-mcus-stmicroelectronics.pdf) <sup>[(errata)](https://www.st.com/resource/en/errata_sheet/es0561-stm32h503cbebkbrb-device-errata-stmicroelectronics.pdf)</sup> | [Nucleo H503RB](https://www.st.com/en/evaluation-tools/nucleo-h503rb.html) |
+| stm32h562 | ❌*       | [RM0481](https://www.st.com/resource/en/reference_manual/rm0481-stm32h563h573-and-stm32h562-armbased-32bit-mcus-stmicroelectronics.pdf) <sup>[(errata)](https://www.st.com/resource/en/errata_sheet/es0565-stm32h562xx563xx573xx-device-errata-stmicroelectronics.pdf)</sup>|  |
+| stm32h563 | ❌*       | [RM0481](https://www.st.com/resource/en/reference_manual/rm0481-stm32h563h573-and-stm32h562-armbased-32bit-mcus-stmicroelectronics.pdf) <sup>[(errata)](https://www.st.com/resource/en/errata_sheet/es0565-stm32h562xx563xx573xx-device-errata-stmicroelectronics.pdf)</sup> | [Nucleo H563ZI](https://www.st.com/en/evaluation-tools/nucleo-h563zi.html) |
+| stm32h573 | ❌*       | [RM0481](https://www.st.com/resource/en/reference_manual/rm0481-stm32h563h573-and-stm32h562-armbased-32bit-mcus-stmicroelectronics.pdf) <sup>[(errata)](https://www.st.com/resource/en/errata_sheet/es0565-stm32h562xx563xx573xx-device-errata-stmicroelectronics.pdf)</sup> |  |
 
 \* Support planned
 
