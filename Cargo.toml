@@ -3,15 +3,44 @@ name = "stm32h5xx-hal"
 version = "0.0.0"
 edition = "2021"
 authors = ["Edwin Svensson <stm32h5xxhal@olback.net>"]
-homepage = "https://github.com/olback/stm32h5xx-hal"
-repository = "https://github.com/olback/stm32h5xx-hal"
+homepage = "https://github.com/stm32-rs/stm32h5xx-hal"
+repository = "https://github.com/stm32-rs/stm32h5xx-hal"
 readme = "README.md"
-rust-version = "1.65"
+rust-version = "1.69.0"
 categories = ["embedded", "hardware-support", "no-std"]
 description = "Hardware Abstraction Layer implementation for STM32H5 series microcontrollers"
 keywords = ["arm", "cortex-m", "stm32h5xx", "hal", "embedded-hal"]
 license = "0BSD"
+exclude = [".gitignore", "tools/"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[package.metadata.docs.rs]
+features = ["stm32h503", "rt"]
+targets = ["thumbv8m.main-none-eabihf"]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+default = ["rt"]
+device-selected = []
+rm0492 = []
+rm0481 = []
+rt = ["stm32h5/rt"]
+stm32h503 = ["stm32h5/stm32h503", "device-selected", "rm0492"]
+stm32h562 = ["stm32h5/stm32h562", "device-selected", "rm0481"]
+stm32h563 = ["stm32h5/stm32h563", "device-selected", "rm0481"]
+stm32h573 = ["stm32h5/stm32h573", "device-selected", "rm0481"]
+# Flags for examples
+log-itm = []
+log-rtt = []
+log-semihost = []
 
 [dependencies]
+cortex-m = { version = "^0.7.7", features = ["critical-section-single-core"] }
+stm32h5 = "*"
+fugit = "0.3.6"
+embedded-hal = { version = "0.2.7", features = ["unproven"] }
+
+[profile.release]
+codegen-units = 1 # better optimizations
+debug = true # symbols are nice and they don't increase the size in flash
+lto = true # better optimizations
+opt-level = "s" # optimize for binary size

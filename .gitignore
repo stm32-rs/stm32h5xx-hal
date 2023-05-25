@@ -1,2 +1,9 @@
 /target
-/Cargo.lock
+**/*.rs.bk
+Cargo.lock
+*.hex
+*.bin
+.gdb_history
+Embed.toml
+.vscode/*
+!.vscode/settings.json

@@ -1,0 +1,15 @@
+on:
+  push:
+    branches: [ staging, trying, master ]
+  pull_request:
+
+name: Verify rustc versions match
+
+jobs:
+  fmt:
+    name: Rustc version match
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v3
+      - run: node tools/verify-rust-version.js

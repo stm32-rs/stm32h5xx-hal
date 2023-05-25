@@ -1,0 +1,55 @@
+on:
+  push:
+    branches: [ master ]        # Do not run on staging / trying
+  pull_request:
+
+# Checks the crate compiles on nightly rust, and that the logging options for the
+# examples compile on nightly
+name: Nightly rust examples
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        mcu:
+          - stm32h503
+          - stm32h562
+          - stm32h563
+          - stm32h573
+        logging:                # Example logging options
+          - log-itm
+          - log-semihost
+          - log-rtt
+    env:                        # Peripheral Feature flags
+      FLAGS: rt
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Cache cargo registry and index
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+      - name: Cache cargo build
+        uses: actions/cache@v2
+        with:
+          path: target
+          key: ${{ runner.os }}-target-nightly-${{ hashFiles('**/Cargo.toml') }}-memory-${{ hashFiles('**/*.x') }}
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          target: thumbv8m.main-none-eabihf
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --verbose --release --examples --target thumbv8m.main-none-eabihf --features ${{ matrix.mcu }},${{ env.FLAGS }},${{ matrix.logging }}
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --lib --target x86_64-unknown-linux-gnu --features ${{ matrix.mcu }},${{ env.FLAGS }}
