@@ -11,3 +11,26 @@ compile_error!(
         stm32h573
 "
 );
+
+#[cfg(all(feature = "rm0492", feature = "rm0481"))]
+compile_error!("Cannot not select both rm0492 and rm0481");
+
+#[cfg(feature = "stm32h503")]
+pub use stm32h5::stm32h503 as stm32;
+
+#[cfg(any(
+    feature = "stm32h562",
+    feature = "stm32h563",
+    feature = "stm32h573",
+))]
+pub use stm32h5::stm32h573 as stm32;
+
+#[cfg(feature = "device-selected")]
+pub use crate::stm32 as pac;
+#[cfg(feature = "device-selected")]
+pub use crate::stm32 as device;
+
+// Enable use of interrupt macro
+#[cfg(feature = "rt")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rt")))]
+pub use crate::stm32::interrupt;

@@ -1,0 +1,8 @@
+{
+    "rust-analyzer.cargo.features": [
+        "rt",
+        "stm32h503"
+    ],
+    "rust-analyzer.check.allTargets": false,
+    "rust-analyzer.check.targets": "thumbv8m.main-none-eabihf",
+}

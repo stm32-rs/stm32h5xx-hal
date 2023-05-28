@@ -35,9 +35,22 @@ log-semihost = []
 
 [dependencies]
 cortex-m = { version = "^0.7.7", features = ["critical-section-single-core"] }
-stm32h5 = "*"
+stm32h5 = { version = "*", git = "https://github.com/stm32-rs/stm32-rs-nightlies" }
 fugit = "0.3.6"
 embedded-hal = { version = "0.2.7", features = ["unproven"] }
+
+[dev-dependencies]
+cortex-m-rt = ">=0.6.15,<0.8"
+log = "0.4.11"
+panic-halt = "0.2.0"
+panic-rtt-target = { version = "0.1.0", features = ["cortex-m"] }
+cfg-if = "1.0.0"
+rtt-target = "0.4.0"
+lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
+cortex-m-log = { version = "0.8.0", features = ["itm", "semihosting", "log-integration"] }
+cortex-m-semihosting = "0.5.0"
+panic-itm = { version = "~0.4.1" }
+panic-semihosting = "0.6"
 
 [profile.release]
 codegen-units = 1 # better optimizations
