@@ -5,7 +5,6 @@ use core::fmt::Display;
 
 /// Gets and clears the reason of why the mcu was reset
 #[rustfmt::skip]
-#[allow(dead_code)]
 pub fn get_reset_reason(rcc: &mut crate::stm32::RCC) -> ResetReason {
     let reset_reason = rcc.rsr().read();
 
@@ -55,7 +54,6 @@ pub fn get_reset_reason(rcc: &mut crate::stm32::RCC) -> ResetReason {
 
 /// Gives the reason why the mcu was reset
 #[derive(Debug, Copy, Clone)]
-#[allow(dead_code)]
 pub enum ResetReason {
     /// The mcu went from not having power to having power and resetting
     PowerOnReset,
