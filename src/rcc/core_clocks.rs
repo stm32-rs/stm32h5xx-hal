@@ -79,7 +79,6 @@ macro_rules! pll_getter {
     };
 }
 
-#[allow(dead_code)]
 impl CoreClocks {
     /// Returns the frequency of AHB1,2,3 busses
     pub fn hclk(&self) -> Hertz {
