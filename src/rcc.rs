@@ -144,6 +144,7 @@ use crate::time::Hertz;
 use log::debug;
 
 mod core_clocks;
+mod mco;
 mod pll;
 pub mod rec;
 mod reset_reason;
@@ -152,6 +153,8 @@ pub use core_clocks::CoreClocks;
 pub use pll::{PllConfig, PllConfigStrategy};
 pub use rec::{LowPowerMode, PeripheralREC, ResetEnable};
 pub use reset_reason::ResetReason;
+
+use mco::{MCO1Config, MCO2Config, MCO1, MCO2};
 
 /// Configuration of the core clocks
 pub struct Config {
@@ -167,6 +170,8 @@ pub struct Config {
     rcc_pclk3: Option<u32>,
     #[cfg(feature = "rm0481")]
     rcc_pclk4: Option<u32>,
+    mco1: MCO1Config,
+    mco2: MCO2Config,
     pll1: PllConfig,
     pll2: PllConfig,
     #[cfg(feature = "rm0481")]
@@ -196,6 +201,8 @@ impl RccExt for RCC {
                 rcc_pclk3: None,
                 #[cfg(feature = "rm0481")]
                 rcc_pclk4: None,
+                mco1: MCO1Config::default(),
+                mco2: MCO2Config::default(),
                 pll1: PllConfig::default(),
                 pll2: PllConfig::default(),
                 #[cfg(feature = "rm0481")]
@@ -547,6 +554,13 @@ impl Rcc {
         // We do not reset RCC here. This routine must assert when
         // the previous state of the RCC peripheral is unacceptable.
 
+        // config modifications ----------------------------------------
+        // (required for self-consistency and usability)
+
+        // if needed for mco, set sys_ck / pll1_p / pll1_q / pll2_p
+        self.mco1_setup();
+        self.mco2_setup();
+
         // sys_ck from PLL if needed, else HSE or HSI
         let (sys_ck, sys_use_pll1_p) = self.sys_ck_setup();
 
@@ -627,6 +641,30 @@ impl Rcc {
             (ppre3, ppre3_bits): (self, rcc_hclk, rcc_pclk3),
         }
 
+        // Calculate MCO dividers and real MCO frequencies
+        let mco1_in = match self.config.mco1.source {
+            // We set the required clock earlier, so can unwrap() here.
+            MCO1::Hsi => HSI,
+            MCO1::Lse => unimplemented!(),
+            MCO1::Hse => self.config.hse.unwrap(),
+            MCO1::Pll1Q => pll1_q_ck.unwrap().raw(),
+            MCO1::Hsi48 => HSI48,
+        };
+        let (mco_1_pre, mco1_ck) =
+            self.config.mco1.calculate_prescaler(mco1_in);
+
+        let mco2_in = match self.config.mco2.source {
+            // We set the required clock earlier, so can unwrap() here.
+            MCO2::Sysclk => sys_ck.raw(),
+            MCO2::Pll2P => pll2_p_ck.unwrap().raw(),
+            MCO2::Hse => self.config.hse.unwrap(),
+            MCO2::Pll1P => pll1_p_ck.unwrap().raw(),
+            MCO2::Csi => CSI,
+            MCO2::Lsi => LSI,
+        };
+        let (mco_2_pre, mco2_ck) =
+            self.config.mco2.calculate_prescaler(mco2_in);
+
         // Start switching clocks here! ----------------------------------------
 
         // Flash setup
@@ -639,6 +677,21 @@ impl Rcc {
         // Ensure HSI48 is on and stable
         rcc.cr().modify(|_, w| w.hsi48on().on());
         while rcc.cr().read().hsi48rdy().is_not_ready() {}
+
+        // Set the MCO outputs.
+        //
+        // It is highly recommended to configure these bits only after
+        // reset, before enabling the external oscillators and the PLLs.
+        rcc.cfgr1().modify(|_, w| {
+            w.mco1sel()
+                .variant(self.config.mco1.source)
+                .mco1pre()
+                .bits(mco_1_pre)
+                .mco2sel()
+                .variant(self.config.mco2.source)
+                .mco2pre()
+                .bits(mco_2_pre)
+        });
 
         // HSE
         let hse_ck = match self.config.hse {
@@ -834,8 +887,8 @@ impl Rcc {
                 hse_ck,
                 lse_ck,
                 audio_ck,
-                mco1_ck: None,
-                mco2_ck: None,
+                mco1_ck,
+                mco2_ck,
                 pll1_p_ck,
                 pll1_q_ck,
                 pll1_r_ck,
