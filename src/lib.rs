@@ -36,3 +36,6 @@ pub use crate::stm32 as device;
 #[cfg(feature = "rt")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rt")))]
 pub use crate::stm32::interrupt;
+
+#[cfg(feature = "device-selected")]
+pub mod prelude;
