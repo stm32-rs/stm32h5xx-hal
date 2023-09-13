@@ -44,6 +44,7 @@ paste = "1.0.15"
 log = { version = "0.4.20", optional = true}
 
 [dev-dependencies]
+log = { version = "0.4.20"}
 cortex-m-rt = "0.7.3"
 panic-halt = "0.2.0"
 panic-rtt-target = { version = "0.1.0", features = ["cortex-m"] }
