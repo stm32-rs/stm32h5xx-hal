@@ -1,7 +1,7 @@
 on:
     pull_request:
     push:
-      branches: [staging, trying, master]
+      branches: [master]
 
 name: Clippy
 
@@ -9,14 +9,8 @@ jobs:
   clippy_check:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions-rs/toolchain@v1
-      with:
-        components: clippy
-        toolchain: 1.69.0
-        target: thumbv8m.main-none-eabihf
-        override: true
-    - uses: actions-rs/clippy-check@v1
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        args: --examples --target thumbv8m.main-none-eabihf --features=rt,stm32h503 -- -D warnings
+    - uses: actions/checkout@v4
+    - name: Install thumb8 rust target
+      run: rustup target add thumbv8m.main-none-eabihf
+    - name: Cargo clippy
+      run: cargo clippy --examples --target thumbv8m.main-none-eabihf --features=rt,stm32h503 -- -D warnings
