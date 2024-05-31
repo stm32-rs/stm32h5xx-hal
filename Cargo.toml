@@ -29,23 +29,25 @@ stm32h562 = ["stm32h5/stm32h562", "device-selected", "rm0481"]
 stm32h563 = ["stm32h5/stm32h563", "device-selected", "rm0481"]
 stm32h573 = ["stm32h5/stm32h573", "device-selected", "rm0481"]
 # Flags for examples
-log-itm = []
-log-rtt = []
-log-semihost = []
+log-itm = ["dep:log"]
+log-rtt = ["dep:log"]
+log-semihost = ["dep:log"]
 
 [dependencies]
 cortex-m = { version = "^0.7.7", features = ["critical-section-single-core"] }
-stm32h5 = { version = "*", git = "https://github.com/stm32-rs/stm32-rs-nightlies" }
-fugit = "0.3.6"
-embedded-hal = { version = "0.2.7", features = ["unproven"] }
+stm32h5 = "0.15.1"
+fugit = "0.3.7"
+embedded-hal = "1.0.0"
+defmt = { version = "0.3.8", optional = true }
+paste = "1.0.15"
+log = { version = "0.4.20", optional = true}
 
 [dev-dependencies]
-cortex-m-rt = ">=0.6.15,<0.8"
-log = "0.4.11"
+cortex-m-rt = "0.7.3"
 panic-halt = "0.2.0"
 panic-rtt-target = { version = "0.1.0", features = ["cortex-m"] }
 cfg-if = "1.0.0"
-rtt-target = "0.4.0"
+rtt-target = "0.5.0"
 lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
 cortex-m-log = { version = "0.8.0", features = ["itm", "semihosting", "log-integration"] }
 cortex-m-semihosting = "0.5.0"
