@@ -18,11 +18,13 @@ compile_error!("Cannot not select both rm0492 and rm0481");
 #[cfg(feature = "stm32h503")]
 pub use stm32h5::stm32h503 as stm32;
 
-#[cfg(any(
-    feature = "stm32h562",
-    feature = "stm32h563",
-    feature = "stm32h573",
-))]
+#[cfg(feature = "stm32h562")]
+pub use stm32h5::stm32h562 as stm32;
+
+#[cfg(feature = "stm32h563")]
+pub use stm32h5::stm32h563 as stm32;
+
+#[cfg(feature = "stm32h573")]
 pub use stm32h5::stm32h573 as stm32;
 
 #[cfg(feature = "device-selected")]
