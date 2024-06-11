@@ -45,3 +45,6 @@ pub mod pwr;
 
 #[cfg(feature = "device-selected")]
 pub mod time;
+
+#[cfg(feature = "device-selected")]
+pub mod rcc;
