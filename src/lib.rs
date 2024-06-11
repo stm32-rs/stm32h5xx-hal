@@ -39,3 +39,6 @@ pub use crate::stm32::interrupt;
 
 #[cfg(feature = "device-selected")]
 pub mod prelude;
+
+#[cfg(feature = "device-selected")]
+pub mod pwr;

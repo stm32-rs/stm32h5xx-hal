@@ -4,7 +4,7 @@
 mod utilities;
 
 use cortex_m_rt::entry;
-use stm32h5xx_hal::pac;
+use stm32h5xx_hal::{pac, prelude::*};
 
 #[entry]
 fn main() -> ! {
@@ -12,7 +12,8 @@ fn main() -> ! {
 
     let dp = pac::Peripherals::take().unwrap();
 
-    // TODO: Power/clock config is required before blinky can... blink.
+    let pwr = dp.PWR.constrain();
+    let _pwrcfg = pwr.vos0().freeze();
 
     dp.GPIOA.moder().write(|w| w.mode5().output()); // output
     dp.GPIOA.pupdr().write(|w| w.pupd5().pull_up()); // pull-up
