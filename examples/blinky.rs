@@ -13,7 +13,11 @@ fn main() -> ! {
     let dp = pac::Peripherals::take().unwrap();
 
     let pwr = dp.PWR.constrain();
-    let _pwrcfg = pwr.vos0().freeze();
+    let pwrcfg = pwr.vos0().freeze();
+
+    // Constrain and Freeze clock
+    let rcc = dp.RCC.constrain();
+    let _ccdr = rcc.sys_ck(250.MHz()).freeze(pwrcfg, &dp.SBS);
 
     dp.GPIOA.moder().write(|w| w.mode5().output()); // output
     dp.GPIOA.pupdr().write(|w| w.pupd5().pull_up()); // pull-up
