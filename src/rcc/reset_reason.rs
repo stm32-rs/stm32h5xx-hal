@@ -19,8 +19,8 @@ pub fn get_reset_reason(rcc: &mut crate::stm32::RCC) -> ResetReason {
         reset_reason.wwdgrstf().is_reset_occurred(),
         reset_reason.iwdgrstf().is_reset_occurred(),
         reset_reason.sftrstf().is_reset_occurred(),
-        reset_reason.pinrstf().is_reset_occurred(),
         reset_reason.borrstf().is_reset_occurred(),
+        reset_reason.pinrstf().is_reset_occurred(),
     ) {
         (false, false, false, false, true, true) => {
             ResetReason::PowerOnReset
@@ -31,13 +31,13 @@ pub fn get_reset_reason(rcc: &mut crate::stm32::RCC) -> ResetReason {
         (false, false, false, true, false, true) => {
             ResetReason::SystemReset
         }
-        (false, true, false, false, false, false) | (false, true, false, false, false, true) => {
+        (false, true, false, false, false, true) => {
             ResetReason::WindowWatchdogReset
         }
-        (false, false, true, false, false, false) => {
+        (false, false, true, false, false, true) => {
             ResetReason::IndependentWatchdogReset
         }
-        (true, false, false, false, false, false) => {
+        (true, false, false, false, false, true) => {
             ResetReason::IllegalStopEntryReset
         }
         (false, true, true, false, false, true) => {
