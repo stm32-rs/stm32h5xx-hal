@@ -78,7 +78,6 @@ use cortex_m::interrupt;
 use paste;
 
 /// A trait for Resetting, Enabling and Disabling a single peripheral
-#[allow(dead_code)]
 pub trait ResetEnable {
     /// Enable this peripheral
     #[allow(clippy::return_self_not_must_use)]
