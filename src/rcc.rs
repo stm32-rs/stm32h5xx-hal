@@ -8,6 +8,7 @@ use crate::time::Hertz;
 use log::debug;
 
 mod core_clocks;
+mod rec;
 mod reset_reason;
 
 pub use core_clocks::CoreClocks;
