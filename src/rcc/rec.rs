@@ -129,7 +129,7 @@ macro_rules! peripheral_reset_and_enable_control {
     ($( #[ $tmeta:meta ] $AXBn:ident, $axb_doc:expr => [
         $(
             $( #[ $pmeta:meta ] )*
-                $(($Auto:ident))* $p:ident
+                $(($NoReset:ident))? $p:ident
                 $([ kernel $clk:ident: $pk:ident $(($Variant:ident))* $ccip:ident $clk_doc:expr ])*
                 $([ group clk: $pk_g:ident $( $(($Variant_g:ident))* $ccip_g:ident $clk_doc_g:expr )* ])*
                 $([ fixed clk: $clk_doc_f:expr ])*
@@ -175,7 +175,7 @@ macro_rules! peripheral_reset_and_enable_control {
                 $(
                     #[ $tmeta ]
                     peripheral_reset_and_enable_control_generator! (
-                        $AXBn, $(($Auto))* $p, [< $p:upper >], [< $p:lower >],
+                        $AXBn, $(($NoReset))* $p, [< $p:upper >], [< $p:lower >],
                         $( $pmeta )*
                         $(
                             [kernel $clk: $pk $(($Variant))* $ccip $clk_doc]
@@ -193,6 +193,30 @@ macro_rules! peripheral_reset_and_enable_control {
     }
 }
 
+macro_rules! peripheral_reset_function_behavior {
+    (
+        $AXBn:ident,
+        $p:ident
+    ) => {
+        paste::item! {
+            // unsafe: Owned exclusive access to this bitfield
+            interrupt::free(|_| {
+                let rstr = unsafe {
+                    &(*RCC::ptr()).[< $AXBn:lower rstr >]()
+                };
+                rstr.modify(|_, w| w.
+                            [< $p:lower rst >]().set_bit());
+                rstr.modify(|_, w| w.
+                            [< $p:lower rst >]().clear_bit());
+            });
+        }
+    };
+    (
+        $AXBn:ident,
+        $NoReset:ident $p:ident
+    ) => {};
+}
+
 // This macro uses the paste::item! macro to create identifiers.
 //
 // https://crates.io/crates/paste
@@ -202,7 +226,7 @@ macro_rules! peripheral_reset_and_enable_control {
 macro_rules! peripheral_reset_and_enable_control_generator {
     (
         $AXBn:ident,
-        $(($Auto:ident))* $p:ident,
+        $(($NoReset:ident))? $p:ident,
         $p_upper:ident,         // Lower and upper case $p available for use in
         $p_lower:ident,         // comments, equivalent to with the paste macro.
 
@@ -319,16 +343,7 @@ macro_rules! peripheral_reset_and_enable_control_generator {
                 }
                 #[inline(always)]
                 fn reset(self) -> Self {
-                    // unsafe: Owned exclusive access to this bitfield
-                    interrupt::free(|_| {
-                        let rstr = unsafe {
-                            &(*RCC::ptr()).[< $AXBn:lower rstr >]()
-                        };
-                        rstr.modify(|_, w| w.
-                                    [< $p:lower rst >]().set_bit());
-                        rstr.modify(|_, w| w.
-                                    [< $p:lower rst >]().clear_bit());
-                    });
+                    peripheral_reset_function_behavior!($AXBn, $($NoReset)? $p);
                     self
                 }
             }
@@ -469,15 +484,22 @@ peripheral_reset_and_enable_control! {
 
     #[cfg(all())]
     AHB1, "AMBA High-performance Bus (AHB1) peripherals" => [
+        (NoReset) Sram1,
+        (NoReset) BkpRam,
         RamCfg,
         Crc,
-
+        (NoReset) Flitf,
         Gpdma1,
         Gpdma2
+    ];
+    #[cfg(feature = "rm0492")]
+    AHB1, "" => [
+        (NoReset) Gtzc1
     ];
 
     #[cfg(all())]
     AHB2, "AMBA High-performance Bus (AHB2) peripherals" => [
+        (NoReset) Sram2,
         Hash,
         Gpioh,
         Gpiod,
@@ -496,7 +518,7 @@ peripheral_reset_and_enable_control! {
     #[cfg(all())]
     APB1L, "Advanced Peripheral Bus 1L (APB1L) peripherals" => [
         Crs,
-
+        (NoReset) Wwdg,
         Tim2, Tim3, Tim6, Tim7
     ];
     #[cfg(feature = "rm0492")]
@@ -508,7 +530,6 @@ peripheral_reset_and_enable_control! {
 
         Usart2 [kernel clk: Usart2(Variant) ccipr1 "USART2"],
         Usart3 [kernel clk: Usart3(Variant) ccipr1 "USART3"],
-
 
         Spi2 [kernel clk: Spi2(Variant) ccipr3 "SPI2"],
         Spi3 [kernel clk: Spi3(Variant) ccipr3 "SPI3"],
@@ -539,7 +560,8 @@ peripheral_reset_and_enable_control! {
 
     #[cfg(all())]
     APB3, "Advanced Peripheral Bus 3 (APB3) peripherals" => [
-        Sbs
+        (NoReset) RtcApb,
+        (NoReset) Sbs
     ];
     #[cfg(feature = "rm0492")]
     APB3, "" => [
