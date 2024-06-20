@@ -472,9 +472,9 @@ mod tests {
         let rcc = MockRcc::new();
 
         let pllsrc = 16_000_000; // PLL source frequency eg. 16MHz crystal
-        let pll_p_target = 48_000 * 256; // Target clock
-        let pll_q_target = 48_000 * 128; // Target clock
-        let pll_r_target = 48_000 * 63; // Target clock
+        let pll_p_target = 48_000 * 256; // Target clock = 12.288MHz
+        let pll_q_target = 48_000 * 128; // Target clock = 6.144MHz
+        let pll_r_target = 48_000 * 63; // Target clock = 3.024MHz
         let pllcfg = PllConfig {
             strategy: PllConfigStrategy::Integer,
             p_ck: Some(pll_p_target),
@@ -543,18 +543,28 @@ mod tests {
         // The other clocks accuracy will vary depending on how close
         // they are to an integer fraction of the P_CK
         assert!(output_p <= pll_p_target as f32);
-        let error = output_p - pll_p_target as f32;
+        let error_p = output_p - pll_p_target as f32;
         assert!(
-            f32::abs(error) < (pll_p_target as f32 / 500_000.0),
-            "P error too large: {error}"
+            f32::abs(error_p) < (pll_p_target as f32 / 500_000.0),
+            "P error too large: {error_p}"
         ); // < ±.0002% = 2ppm error
 
         let output_q = vco_ck_achieved as f32 / pll_x_q as f32;
+        let error_q = output_q - pll_q_target as f32;
+        assert!(
+            f32::abs(error_q) < (pll_q_target as f32 / 100.0),
+            "Q error too large: {error_q}"
+        ); // < ±1% error
         println!("Q Divider {}", pll_x_q);
         println!("==> Output Q {} MHz", output_q / 1e6);
         println!();
 
         let output_r = vco_ck_achieved as f32 / pll_x_r as f32;
+        let error_r = output_r - pll_r_target as f32;
+        assert!(
+            f32::abs(error_r) < (pll_r_target as f32 / 100.0),
+            "R error too large: {error_r}"
+        ); // < ±1% error
         println!("R Divider {}", pll_x_r);
         println!("==> Output R {} MHz", output_r / 1e6);
         println!();
