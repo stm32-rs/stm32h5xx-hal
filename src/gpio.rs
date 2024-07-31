@@ -44,8 +44,10 @@
 //! ownership reasons, you can use the closure based `with_<mode>` functions to temporarily change the pin type, do
 //! some output or input, and then have it change back once done.
 
+mod erased;
 mod exti;
 mod gpio_def;
+mod partially_erased;
 
 use core::{fmt, marker::PhantomData};
 
@@ -53,8 +55,10 @@ pub use embedded_hal::digital::PinState;
 
 use crate::rcc::ResetEnable;
 
+pub use erased::{EPin, ErasedPin};
 pub use exti::ExtiPin;
 pub use gpio_def::*;
+pub use partially_erased::{PEPin, PartiallyErasedPin};
 
 /// A filler pin type
 #[derive(Debug)]
@@ -354,6 +358,46 @@ where
         } else {
             self.internal_resistor(Pull::None)
         }
+    }
+}
+
+impl<const P: char, const N: u8, MODE> Pin<P, N, MODE> {
+    /// Erases the pin number from the type
+    ///
+    /// This is useful when you want to collect the pins into an array where you
+    /// need all the elements to have the same type
+    pub fn erase_number(self) -> PartiallyErasedPin<P, MODE> {
+        PartiallyErasedPin::new(N)
+    }
+
+    /// Erases the pin number and the port from the type
+    ///
+    /// This is useful when you want to collect the pins into an array where you
+    /// need all the elements to have the same type
+    pub fn erase(self) -> ErasedPin<MODE> {
+        ErasedPin::new(P as u8 - b'A', N)
+    }
+}
+
+impl<const P: char, const N: u8, MODE> From<Pin<P, N, MODE>>
+    for PartiallyErasedPin<P, MODE>
+{
+    /// Pin-to-partially erased pin conversion using the [`From`] trait.
+    ///
+    /// Note that [`From`] is the reciprocal of [`Into`].
+    fn from(p: Pin<P, N, MODE>) -> Self {
+        p.erase_number()
+    }
+}
+
+impl<const P: char, const N: u8, MODE> From<Pin<P, N, MODE>>
+    for ErasedPin<MODE>
+{
+    /// Pin-to-erased pin conversion using the [`From`] trait.
+    ///
+    /// Note that [`From`] is the reciprocal of [`Into`].
+    fn from(p: Pin<P, N, MODE>) -> Self {
+        p.erase()
     }
 }
 

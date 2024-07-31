@@ -42,6 +42,9 @@ macro_rules! gpio {
                 }
             }
 
+            #[doc=concat!("Common type for GPIO", $port_id, " related pins")]
+            pub type $PXn<MODE> = crate::gpio::PartiallyErasedPin<$port_id, MODE>;
+
             $(
                 #[doc=concat!("P", $port_id, $i, " pin")]
                 pub type $PXi<MODE = crate::gpio::Analog> = crate::gpio::Pin<$port_id, $i, MODE>;
