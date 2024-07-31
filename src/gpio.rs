@@ -43,7 +43,19 @@
 //! If you need a more temporary mode change, and can not use the `into_<mode>` functions for
 //! ownership reasons, you can use the closure based `with_<mode>` functions to temporarily change the pin type, do
 //! some output or input, and then have it change back once done.
+//!
+//! ### Dynamic Mode Change
+//! The above mode change methods guarantee that you can only call input functions when the pin is
+//! in input mode, and output when in output modes, but can lead to some issues. Therefore, there
+//! is also a mode where the state is kept track of at runtime, allowing you to change the mode
+//! often, and without problems with ownership, or references, at the cost of some performance and
+//! the risk of runtime errors.
+//!
+//! To make a pin dynamic, use the `into_dynamic` function, and then use the `make_<mode>` functions to
+//! change the mode
 
+mod convert;
+mod dynamic;
 mod erased;
 mod exti;
 mod gpio_def;
@@ -51,9 +63,11 @@ mod partially_erased;
 
 use core::{fmt, marker::PhantomData};
 
-pub use embedded_hal::digital::PinState;
-
 use crate::rcc::ResetEnable;
+
+pub use convert::PinMode;
+pub use dynamic::{Dynamic, DynamicPin};
+pub use embedded_hal::digital::PinState;
 
 pub use erased::{EPin, ErasedPin};
 pub use exti::ExtiPin;
@@ -166,10 +180,8 @@ mod marker {
     /// Marker trait for active pin modes
     pub trait Active {}
     /// Marker trait for all pin modes except alternate
-    #[allow(dead_code)] // TODO: Remove when alternate function conversion is implemented
     pub trait NotAlt {}
     /// Marker trait for pins with alternate function `A` mapping
-    #[allow(dead_code)] // TODO: Remove when alternate function conversion is implemented
     pub trait IntoAf<const A: u8> {}
 }
 
