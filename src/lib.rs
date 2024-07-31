@@ -52,6 +52,14 @@ pub mod rcc;
 #[cfg(feature = "device-selected")]
 pub mod gpio;
 
+#[cfg(feature = "device-selected")]
+mod sealed {
+    pub trait Sealed {}
+}
+
+#[cfg(feature = "device-selected")]
+pub(crate) use sealed::Sealed;
+
 /// Get the name of the type without the module prefix(es)
 fn stripped_type_name<T>() -> &'static str {
     let s = core::any::type_name::<T>();
