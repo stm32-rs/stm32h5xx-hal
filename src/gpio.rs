@@ -44,6 +44,7 @@
 //! ownership reasons, you can use the closure based `with_<mode>` functions to temporarily change the pin type, do
 //! some output or input, and then have it change back once done.
 
+mod exti;
 mod gpio_def;
 
 use core::{fmt, marker::PhantomData};
@@ -52,6 +53,7 @@ pub use embedded_hal::digital::PinState;
 
 use crate::rcc::ResetEnable;
 
+pub use exti::ExtiPin;
 pub use gpio_def::*;
 
 /// A filler pin type
@@ -152,7 +154,6 @@ pub type Debugger = Alternate<0, PushPull>;
 
 mod marker {
     /// Marker trait that show if `ExtiPin` can be implemented
-    #[allow(dead_code)] // TODO: Remove when EXTI is implemented
     pub trait Interruptable {}
     /// Marker trait for readable pin modes
     pub trait Readable {}
