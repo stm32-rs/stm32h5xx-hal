@@ -31,6 +31,10 @@ pub struct Instant {
 }
 
 impl Instant {
+    pub fn new(now: u32) -> Self {
+        Self { now }
+    }
+
     /// Ticks elapsed since the `Instant` was created
     pub fn elapsed(&self) -> u32 {
         DWT::cycle_count().wrapping_sub(self.now)

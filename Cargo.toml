@@ -29,9 +29,10 @@ stm32h562 = ["stm32h5/stm32h562", "device-selected", "rm0481"]
 stm32h563 = ["stm32h5/stm32h563", "device-selected", "rm0481"]
 stm32h573 = ["stm32h5/stm32h573", "device-selected", "rm0481"]
 # Flags for examples
-log-itm = ["dep:log"]
-log-rtt = ["dep:log"]
-log-semihost = ["dep:log"]
+log = ["dep:log"]
+log-itm = ["log"]
+log-rtt = ["log"]
+log-semihost = ["log"]
 
 [dependencies]
 cortex-m = { version = "^0.7.7", features = ["critical-section-single-core"] }
