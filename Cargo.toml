@@ -20,9 +20,17 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = ["rt"]
+
 device-selected = []
-rm0492 = []
-rm0481 = []
+
+# rmXXXX represent processor subfamilies and their common features
+rm0492 = ["gpio-h503"]
+rm0481 = ["gpio-h5x"]   # STM32H52x/6x/7x
+
+# Different subfamilies have different GPIOs available
+gpio-h503 = []
+gpio-h5x = []
+
 rt = ["stm32h5/rt"]
 stm32h503 = ["stm32h5/stm32h503", "device-selected", "rm0492"]
 stm32h562 = ["stm32h5/stm32h562", "device-selected", "rm0481"]
