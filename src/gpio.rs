@@ -208,21 +208,37 @@ pub enum Edge {
     RisingFalling,
 }
 
+#[doc = "Alternate function 0 (type state)"]
 pub type AF0<Otype = PushPull> = Alternate<0, Otype>;
+#[doc = "Alternate function 1 (type state)"]
 pub type AF1<Otype = PushPull> = Alternate<1, Otype>;
+#[doc = "Alternate function 2 (type state)"]
 pub type AF2<Otype = PushPull> = Alternate<2, Otype>;
+#[doc = "Alternate function 3 (type state)"]
 pub type AF3<Otype = PushPull> = Alternate<3, Otype>;
+#[doc = "Alternate function 4 (type state)"]
 pub type AF4<Otype = PushPull> = Alternate<4, Otype>;
+#[doc = "Alternate function 5 (type state)"]
 pub type AF5<Otype = PushPull> = Alternate<5, Otype>;
+#[doc = "Alternate function 6 (type state)"]
 pub type AF6<Otype = PushPull> = Alternate<6, Otype>;
+#[doc = "Alternate function 7 (type state)"]
 pub type AF7<Otype = PushPull> = Alternate<7, Otype>;
+#[doc = "Alternate function 8 (type state)"]
 pub type AF8<Otype = PushPull> = Alternate<8, Otype>;
+#[doc = "Alternate function 9 (type state)"]
 pub type AF9<Otype = PushPull> = Alternate<9, Otype>;
+#[doc = "Alternate function 10 (type state)"]
 pub type AF10<Otype = PushPull> = Alternate<10, Otype>;
+#[doc = "Alternate function 11 (type state)"]
 pub type AF11<Otype = PushPull> = Alternate<11, Otype>;
+#[doc = "Alternate function 12 (type state)"]
 pub type AF12<Otype = PushPull> = Alternate<12, Otype>;
+#[doc = "Alternate function 13 (type state)"]
 pub type AF13<Otype = PushPull> = Alternate<13, Otype>;
+#[doc = "Alternate function 14 (type state)"]
 pub type AF14<Otype = PushPull> = Alternate<14, Otype>;
+#[doc = "Alternate function 15 (type state)"]
 pub type AF15<Otype = PushPull> = Alternate<15, Otype>;
 
 /// Generic pin type
