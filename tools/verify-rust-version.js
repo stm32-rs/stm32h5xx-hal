@@ -7,7 +7,6 @@ const re2 = /(1\.[0-9]{2}\.[0-9]{1})/g;
 const cargo_toml = 'Cargo.toml';
 const files = [
     'README.md',
-    '.github/bors.toml',
     '.github/workflows/ci.yml',
     '.github/workflows/clippy.yml',
     '.github/workflows/nightly.yml',
