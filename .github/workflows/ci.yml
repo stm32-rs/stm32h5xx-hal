@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:                   # All permutations of {rust, mcu}
         rust:
-          - 1.69.0  # MSRV
+          - 1.78.0  # MSRV
           - stable
         mcu:
           - stm32h503
@@ -19,7 +19,7 @@ jobs:
           - stm32h563
           - stm32h573
     env:                        # Peripheral Feature flags
-      FLAGS: rt
+      FLAGS: rt,log
 
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +35,8 @@ jobs:
         with:
           path: target
           key: ${{ runner.os }}-target-${{ matrix.rust }}-${{ hashFiles('**/Cargo.toml') }}-memory-${{ hashFiles('**/*.x') }}
+      - name: Set rust version
+        run: rustup override set ${{ matrix.rust }}
       - name: Install thumbv8m rust target
         run: rustup target add thumbv8m.main-none-eabihf
       - name: Build

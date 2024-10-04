@@ -29,7 +29,7 @@ every single model.
 
 ### Minimum supported Rust version
 
-The Minimum Supported Rust Version (MSRV) at the moment is **1.69.0**. Older
+The Minimum Supported Rust Version (MSRV) at the moment is **1.78.0**. Older
 versions **may** compile, especially when some features are not used in your
 application.
 
