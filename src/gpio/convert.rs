@@ -126,22 +126,6 @@ where
     }
 }
 
-macro_rules! af {
-    ($($into_alternate_af:ident: $A:literal;)+) => {
-        $(
-            #[doc="Configures the pin to operate in alternate function "]
-            #[doc=stringify!($A)]
-            #[doc=" mode"]
-            #[deprecated(since = "0.12.0", note = "Use the .into_alternate() method instead")]
-            pub fn $into_alternate_af(self) -> Pin<P, N, Alternate<$A, PushPull>> where
-                Self: marker::IntoAf<$A>,
-            {
-                self.into_alternate::<$A>()
-            }
-        )+
-    }
-}
-
 impl<const P: char, const N: u8, MODE: PinMode> Pin<P, N, MODE> {
     /// Configures the pin to operate alternate mode
     pub fn into_alternate<const A: u8>(
@@ -151,25 +135,6 @@ impl<const P: char, const N: u8, MODE: PinMode> Pin<P, N, MODE> {
         Self: marker::IntoAf<A>,
     {
         self.into_mode()
-    }
-
-    af! {
-        into_alternate_af0: 0;
-        into_alternate_af1: 1;
-        into_alternate_af2: 2;
-        into_alternate_af3: 3;
-        into_alternate_af4: 4;
-        into_alternate_af5: 5;
-        into_alternate_af6: 6;
-        into_alternate_af7: 7;
-        into_alternate_af8: 8;
-        into_alternate_af9: 9;
-        into_alternate_af10: 10;
-        into_alternate_af11: 11;
-        into_alternate_af12: 12;
-        into_alternate_af13: 13;
-        into_alternate_af14: 14;
-        into_alternate_af15: 15;
     }
 
     /// Configures the pin to operate in alternate open drain mode
