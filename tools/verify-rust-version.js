@@ -18,7 +18,7 @@ const cargo_toml_rust_version = cargo_toml_src.split('\n').filter(l => l.startsW
 
 console.log(`Rust version: ${cargo_toml_rust_version}`);
 
-let exitCode = 1;  // Non zero code indicates error
+let exitCode = 0;  // Non zero code indicates error
 
 for (const file of files) {
     const file_content = fs.readFileSync(file, 'UTF8').toString();
@@ -29,7 +29,7 @@ for (const file of files) {
         for (const match of matches1) {
             if (match !== cargo_toml_rust_version.substring(0, 4)) {
                 console.error(`Found reference to version ${match}, expected ${cargo_toml_rust_version} in file ${file}`);
-                exitCode = 0;
+                exitCode = 1;
             }
         }
     }
@@ -38,7 +38,7 @@ for (const file of files) {
         for (const match of matches2) {
             if (match !== cargo_toml_rust_version) {
                 console.error(`Found reference to version ${match}, expected ${cargo_toml_rust_version} in ${file}`);
-                exitCode = 0;
+                exitCode = 1;
             }
         }
     }
