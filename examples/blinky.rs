@@ -32,8 +32,10 @@ fn main() -> ! {
 
     loop {
         dp.GPIOA.odr().write(|w| w.od5().low());
-        delay.delay_ns(duration);
+        delay.delay_ms(duration);
+        log::info!("Off");
         dp.GPIOA.odr().write(|w| w.od5().high());
-        delay.delay_ns(duration);
+        delay.delay_ms(duration);
+        log::info!("On");
     }
 }
