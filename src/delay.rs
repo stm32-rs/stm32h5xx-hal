@@ -41,7 +41,8 @@ pub struct Delay {
     hclk_hz: u32,
     syst: SYST,
 }
-fn calc_rvr(ns: u32, hclk: u32) -> u32 {
+
+fn calc_ticks(ns: u32, hclk: u32) -> u32 {
     // Default is for SYSTICK to be fed by HCLK/8
     let ticks: u64 = (SecsDurationU64::secs(1) * SYSTICK_HCLK_DIV).to_nanos();
     ((ns as u64 * hclk as u64) / ticks) as u32
@@ -69,21 +70,24 @@ impl DelayNs for Delay {
         // The SysTick Reload Value register supports values between 1 and 0x00FFFFFF.
         const MAX_RVR: u32 = 0x00FF_FFFF;
 
-        let mut total_rvr = calc_rvr(ns, self.hclk_hz);
+        let mut total_ticks = calc_ticks(ns, self.hclk_hz);
 
-        while total_rvr != 0 {
-            let current_rvr = if total_rvr <= MAX_RVR {
-                total_rvr
+        while total_ticks != 0 {
+            let current_ticks = if total_ticks <= MAX_RVR {
+                // To count N ticks, set RVR to N-1
+                // (see ARM Cortex M33 Devices Generic User Guide section 4.3.2.1)
+                core::cmp::max(total_ticks - 1, 1)
             } else {
                 MAX_RVR
             };
 
-            self.syst.set_reload(current_rvr);
+            self.syst.set_reload(current_ticks);
             self.syst.clear_current();
             self.syst.enable_counter();
 
-            // Update the tracking variable while we are waiting...
-            total_rvr -= current_rvr;
+            // For an RVR value of N, the SYSTICK counts N+1 ticks
+            // (see ARM Cortex M33 Devices Generic User Guide section 4.3.2.1)
+            total_ticks = total_ticks.saturating_sub(current_ticks + 1);
 
             while !self.syst.has_wrapped() {}
 
@@ -94,19 +98,22 @@ impl DelayNs for Delay {
 
 #[cfg(test)]
 mod tests {
-    use super::calc_rvr;
+    use super::calc_ticks;
     #[test]
     fn test_calc_rvr() {
-        let rvr = calc_rvr(1000, 8_000_000);
+        let rvr = calc_ticks(1_000, 8_000_000);
         assert_eq!(rvr, 1);
 
-        let rvr = calc_rvr(1000_000, 8_000_000);
+        let rvr = calc_ticks(1_000_000, 8_000_000);
         assert_eq!(rvr, 1000);
 
-        let rvr = calc_rvr(1000_000, 10_000_000);
+        let rvr = calc_ticks(1_000_000, 10_000_000);
         assert_eq!(rvr, 1250);
 
-        let rvr = calc_rvr(1000_000, 250_000_000);
-        assert_eq!(rvr, 31250);
+        let rvr = calc_ticks(1_000_000_000, 250_000_000);
+        assert_eq!(rvr, 31_250_000);
+
+        let rvr = calc_ticks(32, 250_000_000);
+        assert_eq!(rvr, 1);
     }
 }
