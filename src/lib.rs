@@ -56,6 +56,9 @@ pub mod gpio;
 pub mod icache;
 
 #[cfg(feature = "device-selected")]
+pub mod delay;
+
+#[cfg(feature = "device-selected")]
 mod sealed {
     pub trait Sealed {}
 }
