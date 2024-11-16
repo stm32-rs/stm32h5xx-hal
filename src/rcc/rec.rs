@@ -512,7 +512,13 @@ peripheral_reset_and_enable_control! {
         Adc [group clk: AdcDac(Variant) ccipr5 "ADC/DAC"],
         Dac12 [group clk: AdcDac]
     ];
-
+    #[cfg(feature = "rm0481")]
+    AHB2, "" => [
+        Gpioi,
+        Gpiog,
+        Gpiof,
+        Gpioe
+    ];
 
     #[cfg(all())]
     APB1L, "Advanced Peripheral Bus 1L (APB1L) peripherals" => [

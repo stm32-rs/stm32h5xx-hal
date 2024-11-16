@@ -24,18 +24,18 @@ default = ["rt"]
 device-selected = []
 
 # rmXXXX represent processor subfamilies and their common features
-rm0492 = ["gpio-h503"]
-rm0481 = ["gpio-h5x"]   # STM32H52x/6x/7x
+rm0492 = []
+rm0481 = []   # STM32H52x/6x/7x
 
 # Different subfamilies have different GPIOs available
 gpio-h503 = []
-gpio-h5x = []
+gpio-h567x = []         # STM32H56x/7x
 
 rt = ["stm32h5/rt"]
-stm32h503 = ["stm32h5/stm32h503", "device-selected", "rm0492"]
-stm32h562 = ["stm32h5/stm32h562", "device-selected", "rm0481"]
-stm32h563 = ["stm32h5/stm32h563", "device-selected", "rm0481"]
-stm32h573 = ["stm32h5/stm32h573", "device-selected", "rm0481"]
+stm32h503 = ["stm32h5/stm32h503", "device-selected", "rm0492", "gpio-h503"]
+stm32h562 = ["stm32h5/stm32h562", "device-selected", "rm0481", "gpio-h567x"]
+stm32h563 = ["stm32h5/stm32h563", "device-selected", "rm0481", "gpio-h567x"]
+stm32h573 = ["stm32h5/stm32h573", "device-selected", "rm0481", "gpio-h567x"]
 # Flags for examples
 log = ["dep:log"]
 log-itm = ["log"]
