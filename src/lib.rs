@@ -53,6 +53,9 @@ pub mod rcc;
 pub mod gpio;
 
 #[cfg(feature = "device-selected")]
+pub mod i2c;
+
+#[cfg(feature = "device-selected")]
 pub mod icache;
 
 #[cfg(feature = "device-selected")]

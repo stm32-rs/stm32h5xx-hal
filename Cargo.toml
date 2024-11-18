@@ -50,6 +50,7 @@ embedded-hal = "1.0.0"
 defmt = { version = "0.3.8", optional = true }
 paste = "1.0.15"
 log = { version = "0.4.20", optional = true}
+nb = "1.1.0"
 
 [dev-dependencies]
 log = { version = "0.4.20"}
@@ -72,4 +73,8 @@ opt-level = "s" # optimize for binary size
 
 [[example]]
 name = "blinky"
+required-features = ["stm32h503"]
+
+[[example]]
+name = "i2c"
 required-features = ["stm32h503"]
