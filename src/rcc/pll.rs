@@ -328,6 +328,8 @@ fn calc_vco_ck(ref_ck: u32, pll_n: u32, pll_fracn: u16) -> u32 {
 impl Rcc {
     pll_setup! {pll1, false}
     pll_setup! {pll2, true}
+    #[cfg(feature = "rm0481")]
+    pll_setup! {pll3, true}
 }
 
 #[cfg(test)]

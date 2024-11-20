@@ -45,9 +45,9 @@ fn main() -> ! {
     info!("sys_ck = {} Hz", ccdr.clocks.sys_ck().raw());
     assert_eq!(ccdr.clocks.sys_ck().raw(), 250_000_000);
 
-    info!("pll2_p_ck = {}", ccdr.clocks.pll2_p_ck().unwrap());
-    info!("pll2_q_ck = {}", ccdr.clocks.pll2_q_ck().unwrap());
-    info!("pll2_r_ck = {}", ccdr.clocks.pll2_r_ck().unwrap());
+    info!("pll2_p_ck = {}", ccdr.clocks.pll2().p_ck().unwrap());
+    info!("pll2_q_ck = {}", ccdr.clocks.pll2().q_ck().unwrap());
+    info!("pll2_r_ck = {}", ccdr.clocks.pll2().r_ck().unwrap());
 
     let _mco2_ck = ccdr.clocks.mco2_ck().unwrap().raw();
 

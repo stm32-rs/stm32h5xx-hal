@@ -133,6 +133,8 @@
 
 use crate::pwr::PowerConfiguration;
 use crate::pwr::VoltageScale as Voltage;
+#[cfg(feature = "rm0481")]
+use crate::stm32::rcc::pll3cfgr::PLL3SRC;
 use crate::stm32::rcc::{
     ccipr5::CKPERSEL, cfgr1::SW, cfgr1::TIMPRE, cfgr2::HPRE,
     cfgr2::PPRE1 as PPRE, pll1cfgr::PLL1SRC, pll2cfgr::PLL2SRC,
@@ -140,6 +142,7 @@ use crate::stm32::rcc::{
 use crate::stm32::{RCC, SBS};
 use crate::time::Hertz;
 
+use core_clocks::PllClocks;
 #[cfg(feature = "log")]
 use log::debug;
 
@@ -168,8 +171,6 @@ pub struct Config {
     rcc_pclk1: Option<u32>,
     rcc_pclk2: Option<u32>,
     rcc_pclk3: Option<u32>,
-    #[cfg(feature = "rm0481")]
-    rcc_pclk4: Option<u32>,
     mco1: MCO1Config,
     mco2: MCO2Config,
     pll1: PllConfig,
@@ -199,8 +200,6 @@ impl RccExt for RCC {
                 rcc_pclk1: None,
                 rcc_pclk2: None,
                 rcc_pclk3: None,
-                #[cfg(feature = "rm0481")]
-                rcc_pclk4: None,
                 mco1: MCO1Config::default(),
                 mco2: MCO2Config::default(),
                 pll1: PllConfig::default(),
@@ -376,11 +375,6 @@ impl Rcc {
         pclk3: rcc_pclk3,
     }
 
-    #[cfg(feature = "rm0481")]
-    pclk_setter! {
-        pclk4: rcc_pclk4,
-    }
-
     pll_setter! {
         pll1: [
             pll1_p_ck: p_ck,
@@ -394,9 +388,23 @@ impl Rcc {
         ],
     }
 
+    #[cfg(feature = "rm0481")]
+    pll_setter! {
+        pll3: [
+            pll3_p_ck: p_ck,
+            pll3_q_ck: q_ck,
+            pll3_r_ck: r_ck,
+        ],
+    }
+
     pll_strategy_setter! {
         pll1: pll1_strategy,
         pll2: pll2_strategy,
+    }
+
+    #[cfg(feature = "rm0481")]
+    pll_strategy_setter! {
+        pll3: pll3_strategy,
     }
 }
 
@@ -574,6 +582,10 @@ impl Rcc {
         let (pll2_p_ck, pll2_q_ck, pll2_r_ck) =
             self.pll2_setup(rcc, &self.config.pll2);
 
+        #[cfg(feature = "rm0481")]
+        let (pll3_p_ck, pll3_q_ck, pll3_r_ck) =
+            self.pll3_setup(rcc, &self.config.pll3);
+
         let sys_ck = if sys_use_pll1_p {
             pll1_p_ck.unwrap() // Must have been set by sys_ck_setup
         } else {
@@ -718,6 +730,15 @@ impl Rcc {
         };
         rcc.pll1cfgr().modify(|_, w| w.pll1src().variant(pll1src));
         rcc.pll2cfgr().modify(|_, w| w.pll2src().variant(pll2src));
+        #[cfg(feature = "rm0481")]
+        {
+            let pll3src = if self.config.hse.is_some() {
+                PLL3SRC::Hse
+            } else {
+                PLL3SRC::Hsi
+            };
+            rcc.pll3cfgr().modify(|_, w| w.pll3src().variant(pll3src));
+        }
 
         // PLL1
         if pll1_p_ck.is_some() {
@@ -731,6 +752,14 @@ impl Rcc {
             // Enable PLL and wait for it to stabilise
             rcc.cr().modify(|_, w| w.pll2on().on());
             while rcc.cr().read().pll2rdy().is_not_ready() {}
+        }
+
+        // PLL3
+        #[cfg(feature = "rm0481")]
+        if pll3_p_ck.is_some() {
+            // Enable PLL and wait for it to stabilise
+            rcc.cr().modify(|_, w| w.pll3on().on());
+            while rcc.cr().read().pll3rdy().is_not_ready() {}
         }
 
         // Core Prescaler / AHB Prescaler / APBx Prescalers
@@ -824,19 +853,6 @@ impl Rcc {
                 pll1cfgr.pll1ren().variant(),
             );
 
-            let pll2cfgr = rcc.pll2cfgr().read();
-            debug!(
-                "PLL2CFGR register: PLL2SRC={:?} PLL2RGE={:?} PLL2FRACEN={:?} PLL2VCOSEL={:?} PLL2M={:#x} PLL2PEN={:?} PLL2QEN={:?} PLL2REN={:?}",
-                pll2cfgr.pll2src().variant(),
-                pll2cfgr.pll2rge().variant(),
-                pll2cfgr.pll2fracen().variant(),
-                pll2cfgr.pll2vcosel().variant(),
-                pll2cfgr.pll2m().bits(),
-                pll2cfgr.pll2pen().variant(),
-                pll2cfgr.pll2qen().variant(),
-                pll2cfgr.pll2ren().variant(),
-            );
-
             let pll1divr = rcc.pll1divr().read();
             debug!(
                 "PLL1DIVR register: PLL1N={:#x} PLL1P={:#x} PLL1Q={:#x} PLL1R={:#x}",
@@ -850,6 +866,19 @@ impl Rcc {
             debug!(
                 "PLL1FRACR register: FRACN1={:#x}",
                 pll1fracr.pll1fracn().bits(),
+            );
+
+            let pll2cfgr = rcc.pll2cfgr().read();
+            debug!(
+                "PLL2CFGR register: PLL2SRC={:?} PLL2RGE={:?} PLL2FRACEN={:?} PLL2VCOSEL={:?} PLL2M={:#x} PLL2PEN={:?} PLL2QEN={:?} PLL2REN={:?}",
+                pll2cfgr.pll2src().variant(),
+                pll2cfgr.pll2rge().variant(),
+                pll2cfgr.pll2fracen().variant(),
+                pll2cfgr.pll2vcosel().variant(),
+                pll2cfgr.pll2m().bits(),
+                pll2cfgr.pll2pen().variant(),
+                pll2cfgr.pll2qen().variant(),
+                pll2cfgr.pll2ren().variant(),
             );
 
             let pll2divr = rcc.pll2divr().read();
@@ -866,7 +895,43 @@ impl Rcc {
                 "PLL2FRACR register: FRACN2={:#x}",
                 pll2fracr.pll2fracn().bits(),
             );
+
+            #[cfg(feature = "rm0481")]
+            {
+                let pll3cfgr = rcc.pll3cfgr().read();
+                debug!(
+                    "PLL3CFGR register: PLL3SRC={:?} PLL3RGE={:?} PLL3FRACEN={:?} PLL3VCOSEL={:?} PLL3M={:#x} PLL3PEN={:?} PLL3QEN={:?} PLL3REN={:?}",
+                    pll3cfgr.pll3src().variant(),
+                    pll3cfgr.pll3rge().variant(),
+                    pll3cfgr.pll3fracen().variant(),
+                    pll3cfgr.pll3vcosel().variant(),
+                    pll3cfgr.pll3m().bits(),
+                    pll3cfgr.pll3pen().variant(),
+                    pll3cfgr.pll3qen().variant(),
+                    pll3cfgr.pll3ren().variant(),
+                );
+
+                let pll3divr = rcc.pll3divr().read();
+                debug!(
+                    "PLL3DIVR register: PLL3N={:#x} PLL3P={:#x} PLL3Q={:#x} PLL3R={:#x}",
+                    pll3divr.pll3n().bits(),
+                    pll3divr.pll3p().bits(),
+                    pll3divr.pll3q().bits(),
+                    pll3divr.pll3r().bits(),
+                );
+
+                let pll3fracr = rcc.pll3fracr().read();
+                debug!(
+                    "PLL3FRACR register: FRACN2={:#x}",
+                    pll3fracr.pll3fracn().bits(),
+                );
+            }
         }
+
+        let pll1 = PllClocks::new(pll1_p_ck, pll1_q_ck, pll1_r_ck);
+        let pll2 = PllClocks::new(pll2_p_ck, pll2_q_ck, pll2_r_ck);
+        #[cfg(feature = "rm0481")]
+        let pll3 = PllClocks::new(pll3_p_ck, pll3_q_ck, pll3_r_ck);
 
         // Return frozen clock configuration
         Ccdr {
@@ -888,12 +953,10 @@ impl Rcc {
                 audio_ck,
                 mco1_ck,
                 mco2_ck,
-                pll1_p_ck,
-                pll1_q_ck,
-                pll1_r_ck,
-                pll2_p_ck,
-                pll2_q_ck,
-                pll2_r_ck,
+                pll1,
+                pll2,
+                #[cfg(feature = "rm0481")]
+                pll3,
                 timx_ker_ck: Hertz::from_raw(rcc_timx_ker_ck),
                 timy_ker_ck: Hertz::from_raw(rcc_timy_ker_ck),
                 sys_ck,
