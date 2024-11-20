@@ -2,6 +2,37 @@
 
 use crate::time::Hertz;
 
+#[derive(Clone, Copy)]
+pub struct PllClocks {
+    p_ck: Option<Hertz>,
+    q_ck: Option<Hertz>,
+    r_ck: Option<Hertz>,
+}
+
+impl PllClocks {
+    pub fn new(
+        p_ck: Option<Hertz>,
+        q_ck: Option<Hertz>,
+        r_ck: Option<Hertz>,
+    ) -> Self {
+        Self { p_ck, q_ck, r_ck }
+    }
+}
+
+impl PllClocks {
+    pub fn p_ck(&self) -> Option<Hertz> {
+        self.p_ck
+    }
+
+    pub fn q_ck(&self) -> Option<Hertz> {
+        self.q_ck
+    }
+
+    pub fn r_ck(&self) -> Option<Hertz> {
+        self.r_ck
+    }
+}
+
 /// Frozen core clock frequencies
 ///
 /// The existence of this value indicates that the core clock
@@ -25,12 +56,10 @@ pub struct CoreClocks {
     pub(super) audio_ck: Option<Hertz>,
     pub(super) mco1_ck: Option<Hertz>,
     pub(super) mco2_ck: Option<Hertz>,
-    pub(super) pll1_p_ck: Option<Hertz>,
-    pub(super) pll1_q_ck: Option<Hertz>,
-    pub(super) pll1_r_ck: Option<Hertz>,
-    pub(super) pll2_p_ck: Option<Hertz>,
-    pub(super) pll2_q_ck: Option<Hertz>,
-    pub(super) pll2_r_ck: Option<Hertz>,
+    pub(super) pll1: PllClocks,
+    pub(super) pll2: PllClocks,
+    #[cfg(feature = "rm0481")]
+    pub(super) pll3: PllClocks,
     pub(super) timx_ker_ck: Hertz,
     pub(super) timy_ker_ck: Hertz,
     pub(super) sys_ck: Hertz,
@@ -61,19 +90,6 @@ macro_rules! optional_ck_getter {
             /// is running, otherwise `None`
             pub fn $opt_ck(&self) -> Option<Hertz> {
                 self.$opt_ck
-            }
-        )+
-    };
-}
-
-/// Getters for pll clocks
-macro_rules! pll_getter {
-    ($($pll_ck:ident,)+) => {
-        $(
-            /// Returns `Some(frequency)` if the PLLx output is running,
-            /// otherwise `None`
-            pub fn $pll_ck(&self) -> Option<Hertz> {
-                self.$pll_ck
             }
         )+
     };
@@ -114,13 +130,20 @@ impl CoreClocks {
         self.mco2_ck
     }
 
-    pll_getter! {
-        pll1_p_ck,
-        pll1_q_ck,
-        pll1_r_ck,
-        pll2_p_ck,
-        pll2_q_ck,
-        pll2_r_ck,
+    /// Returns the configuration for PLL1
+    pub fn pll1(&self) -> PllClocks {
+        self.pll1
+    }
+
+    /// Returns the configuration for PLL2
+    pub fn pll2(&self) -> PllClocks {
+        self.pll2
+    }
+
+    #[cfg(feature = "rm0481")]
+    /// Returns the configuration for PLL3
+    pub fn pll3(&self) -> PllClocks {
+        self.pll3
     }
 
     /// Returns the input frequency to the SCGU
