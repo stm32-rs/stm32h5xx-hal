@@ -31,11 +31,15 @@ rm0481 = ["gpio-h5x"]   # STM32H52x/6x/7x
 gpio-h503 = []
 gpio-h5x = []
 
+ethernet = []
+otfdec = []
+sdmmc2 = []
+
 rt = ["stm32h5/rt"]
 stm32h503 = ["stm32h5/stm32h503", "device-selected", "rm0492"]
 stm32h562 = ["stm32h5/stm32h562", "device-selected", "rm0481"]
-stm32h563 = ["stm32h5/stm32h563", "device-selected", "rm0481"]
-stm32h573 = ["stm32h5/stm32h573", "device-selected", "rm0481"]
+stm32h563 = ["stm32h5/stm32h563", "device-selected", "rm0481", "sdmmc2", "ethernet"]
+stm32h573 = ["stm32h5/stm32h573", "device-selected", "rm0481", "otfdec", "sdmmc2", "ethernet"]
 # Flags for examples
 log = ["dep:log"]
 log-itm = ["log"]

@@ -475,10 +475,6 @@ macro_rules! variant_return_type {
 // Peripherals with an individual kernel clock must be marked "kernel clk". If a
 // kernel clock multiplexer is shared between multiple peripherals, all those
 // peripherals must instead be marked with a common "group clk".
-//
-// NOTE: The stm32h5 crate does not have definitions for the clock source variants for registers for
-// any processors other than the STM32H503 at this time. Therefore, peripherals which have
-// selectable clock sources are currently only specified for the H503 (rm0492).
 peripheral_reset_and_enable_control! {
 
     #[cfg(all())]
@@ -495,6 +491,19 @@ peripheral_reset_and_enable_control! {
     AHB1, "" => [
         (NoReset) Gtzc1
     ];
+    #[cfg(feature = "rm0481")]
+    AHB1, "" => [
+        (NoReset) Dcache,
+        (NoReset) Tzsc1,
+        Fmac,
+        Cordic
+    ];
+    #[cfg(feature = "ethernet")]
+    AHB1, "" => [
+        (NoReset) Ethrx,
+        (NoReset) Ethtx,
+        Eth
+    ];
 
     #[cfg(all())]
     AHB2, "AMBA High-performance Bus (AHB2) peripherals" => [
@@ -504,69 +513,117 @@ peripheral_reset_and_enable_control! {
         Gpiod,
         Gpioc,
         Gpiob,
-        Gpioa
+        Gpioa,
+        Rng [kernel clk: Rng RNG ccipr5 "RNG"],
+        Adc [group clk: AdcDac(Variant) ADCDAC ccipr5 "ADC/DAC"]
     ];
     #[cfg(feature = "rm0492")]
     AHB2, "" => [
-        Rng [kernel clk: Rng RNG ccipr5 "RNG"],
-        Adc [group clk: AdcDac(Variant) ADCDAC ccipr5 "ADC/DAC"],
         Dac12 [group clk: AdcDac]
     ];
+    #[cfg(feature = "rm0481")]
+    AHB2, "" => [
+        Gpioi,
+        Gpiog,
+        Gpiof,
+        Gpioe,
+        Dac1 [group clk: AdcDac]
+    ];
 
+    #[cfg(feature = "rm0481")]
+    AHB4, "AMBA High-performance Bus (AHB4) peripherals" => [
+        Octospi1  [kernel clk: Octospi1 OCTOSPI1 ccipr4 "OCTOSPI1"],
+        Fmc,
+
+        Sdmmc1 [kernel clk: Sdmmc1 SDMMC ccipr4 "SDMMC1"]
+    ];
+    #[cfg(feature = "sdmmc2")]
+    AHB4, "" => [
+        Sdmmc2 [kernel clk: Sdmmc2 SDMMC ccipr4 "SDMMC2"]
+    ];
+    #[cfg(feature = "otfdec")]
+    AHB4, "" => [
+        Otfdec1
+    ];
 
     #[cfg(all())]
     APB1L, "Advanced Peripheral Bus 1L (APB1L) peripherals" => [
+        Usart2 [kernel clk: Usart2(Variant) USART ccipr1 "USART2"],
+        Usart3 [kernel clk: Usart3(Variant) USART ccipr1 "USART3"],
         Crs,
+        I3c1 [kernel clk: I3c1(Variant) I3C ccipr4 "I3C1"],
+        I2c2 [kernel clk: I2c2 I2C ccipr4 "I2C2"],
+        I2c1 [kernel clk: I2c1 I2C ccipr4 "I2C1"],
+        Spi3 [kernel clk: Spi3(Variant) SPI123 ccipr3 "SPI3"],
+        Spi2 [kernel clk: Spi2(Variant) SPI123 ccipr3 "SPI2"],
         (NoReset) Wwdg,
         Tim2, Tim3, Tim6, Tim7
     ];
     #[cfg(feature = "rm0492")]
     APB1L, "" => [
-        I3c1 [kernel clk: I3c1(Variant) I3C ccipr4 "I3C1"],
-
-        I2c1 [kernel clk: I2c1 I2C ccipr4 "I2C1"],
-        I2c2 [kernel clk: I2c2 I2C ccipr4 "I2C2"],
-
-        Usart2 [kernel clk: Usart2(Variant) USART ccipr1 "USART2"],
-        Usart3 [kernel clk: Usart3(Variant) USART ccipr1 "USART3"],
-
-        Spi2 [kernel clk: Spi2(Variant) SPI123 ccipr3 "SPI2"],
-        Spi3 [kernel clk: Spi3(Variant) SPI123 ccipr3 "SPI3"],
         Opamp,
         Comp
+    ];
+    #[cfg(feature = "rm0481")]
+    APB1L, "" => [
+        Uart8 [kernel clk: Uart8(Variant) USART ccipr1 "UART8"],
+        Uart7 [kernel clk: Uart7(Variant) USART ccipr1 "UART7"],
+        Cec [kernel clk: Cec(Variant) CEC ccipr5 "CEC"],
+        Usart11 [kernel clk: Usart11(Variant) USART ccipr2 "USART11"],
+        Usart10 [kernel clk: Usart10(Variant) USART ccipr1 "USART10"],
+        Usart6 [kernel clk: Usart6(Variant) USART ccipr1 "USART6"],
+        Uart5 [kernel clk: Uart5(Variant) USART ccipr1 "USART5"],
+        Uart4 [kernel clk: Uart4(Variant) USART ccipr1 "USART4"],
+        Tim14, Tim13, Tim12, Tim5, Tim4
     ];
 
     #[cfg(all())]
     APB1H, "Advanced Peripheral Bus 1H (APB1H) peripherals" => [
+        Fdcan [kernel clk: Fdcan(Variant) FDCAN ccipr5 "FDCAN"],
+        Lptim2 [kernel clk: Lptim2(Variant) LPTIM ccipr2 "LPTIM2"],
         Dts
     ];
-    #[cfg(feature = "rm0492")]
+    #[cfg(feature = "rm0481")]
     APB1H, "" => [
-        Lptim2 [kernel clk: Lptim2(Variant) LPTIM ccipr2 "LPTIM2"],
-        Fdcan [kernel clk: Fdcan(Variant) FDCAN ccipr5 "FDCAN"]
+        Ucpd1,
+        Uart12 [kernel clk: Uart12(Variant) USART ccipr2 "USART12"],
+        Uart9 [kernel clk: Uart9(Variant) USART ccipr1 "UART9"]
     ];
 
     #[cfg(all())]
     APB2, "Advanced Peripheral Bus 2 (APB2) peripherals" => [
-        Tim1
-    ];
-    #[cfg(feature = "rm0492")]
-    APB2, "" => [
         Usb [kernel clk: Usb USB ccipr4 "USB"],
         Usart1 [kernel clk: Usart1(Variant) USART ccipr1 "USART1"],
-        Spi1 [kernel clk: Spi1(Variant) SPI123 ccipr3 "SPI1"]
+        Spi1 [kernel clk: Spi1(Variant) SPI123 ccipr3 "SPI1"],
+        Tim1
+    ];
+    #[cfg(feature = "rm0481")]
+    APB2, "" => [
+        Sai2 [kernel clk: Sai2(Variant) SAI ccipr5 "SAI2"],
+        Sai1 [kernel clk: Sai1(Variant) SAI ccipr5 "SAI1"],
+        Spi6 [kernel clk: Spi6(Variant) SPI456 ccipr3 "SPI6"],
+        Spi4 [kernel clk: Spi4(Variant) SPI456 ccipr3 "SPI4"],
+        Tim17, Tim16, Tim15, Tim8
     ];
 
     #[cfg(all())]
     APB3, "Advanced Peripheral Bus 3 (APB3) peripherals" => [
         (NoReset) RtcApb,
+        LpTim1 [kernel clk: LpTim1(Variant) LPTIM ccipr2 "LPTIM1"],
+        I3c2 [kernel clk: I3c2(Variant) I3C ccipr4 "I3C2"],
+        LpUart1 [kernel clk: LpUart1(Variant) USART ccipr3 "LPUART1"],
         (NoReset) Sbs
     ];
-    #[cfg(feature = "rm0492")]
+    #[cfg(feature = "rm0481")]
     APB3, "" => [
-        I3c2 [kernel clk: I3c2(Variant) I3C ccipr4 "I3C2"],
-        LpTim1 [kernel clk: LpTim1(Variant) LPTIM ccipr2 "LPTIM1"],
-        LpUart1 [kernel clk: LpUart1(Variant) USART ccipr3 "LPUART1"]
+        Vref,
+        LpTim6 [kernel clk: LpTim6(Variant) LPTIM ccipr2 "LPTIM6"],
+        LpTim5 [kernel clk: LpTim5(Variant) LPTIM ccipr2 "LPTIM5"],
+        LpTim4 [kernel clk: LpTim4(Variant) LPTIM ccipr2 "LPTIM4"],
+        LpTim3 [kernel clk: LpTim3(Variant) LPTIM ccipr2 "LPTIM3"],
+        I2c4 [kernel clk: I2c4 I2C ccipr4 "I2C4"],
+        I2c3 [kernel clk: I2c3 I2C ccipr4 "I2C3"],
+        Spi5 [kernel clk: Spi5(Variant) SPI456 ccipr3 "SPI5"]
     ];
 
 }
