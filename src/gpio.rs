@@ -318,9 +318,9 @@ where
         let offset = 2 * { N };
 
         unsafe {
-            (*Gpio::<P>::ptr()).ospeedr().modify(|_r, w| {
-                w.ospeed(offset).bits(speed as u8)
-            });
+            (*Gpio::<P>::ptr())
+                .ospeedr()
+                .modify(|_r, w| w.ospeed(offset).bits(speed as u8));
         }
     }
 
@@ -340,9 +340,9 @@ where
         let offset = 2 * { N };
         let value = resistor as u8;
         unsafe {
-            (*Gpio::<P>::ptr()).pupdr().modify(|_r, w| {
-                w.pupd(offset).bits(value)
-            });
+            (*Gpio::<P>::ptr())
+                .pupdr()
+                .modify(|_r, w| w.pupd(offset).bits(value));
         }
     }
 
@@ -426,12 +426,16 @@ impl<const P: char, const N: u8, MODE> Pin<P, N, MODE> {
     #[inline(always)]
     fn _set_high(&mut self) {
         // NOTE(unsafe) atomic write to a stateless register
-        unsafe { (*Gpio::<P>::ptr()).bsrr().write(|w| w.bs(N).set_bit()); }
+        unsafe {
+            (*Gpio::<P>::ptr()).bsrr().write(|w| w.bs(N).set_bit());
+        }
     }
     #[inline(always)]
     fn _set_low(&mut self) {
         // NOTE(unsafe) atomic write to a stateless register
-        unsafe { (*Gpio::<P>::ptr()).bsrr().write(|w| w.br(N).set_bit()); }
+        unsafe {
+            (*Gpio::<P>::ptr()).bsrr().write(|w| w.br(N).set_bit());
+        }
     }
     #[inline(always)]
     fn _is_set_low(&self) -> bool {

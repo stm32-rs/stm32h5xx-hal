@@ -72,9 +72,7 @@ impl<const P: char, MODE> PartiallyErasedPin<P, Output<MODE>> {
     pub fn set_low(&mut self) {
         // NOTE(unsafe) atomic write to a stateless register
         unsafe {
-            (*Gpio::<P>::ptr())
-                .bsrr()
-                .write(|w| w.br(self.i).set_bit());
+            (*Gpio::<P>::ptr()).bsrr().write(|w| w.br(self.i).set_bit());
         }
     }
 
