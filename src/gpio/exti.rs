@@ -142,7 +142,7 @@ where
                 Edge::Rising => exti.rpr1().write(|w| w.bits(mask)),
                 Edge::Falling => exti.fpr1().write(|w| w.bits(mask)),
                 _ => panic!("Must choose a rising or falling edge"),
-            }
+            };
         }
     }
 

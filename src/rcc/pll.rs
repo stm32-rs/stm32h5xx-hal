@@ -224,7 +224,7 @@ macro_rules! pll_divider_setup {
 
                     // Setup divider
                     $rcc.[<$pllX divr>]().modify(|_, w|
-                        w.[<$pllX $d>]().variant((pll_x_d.div - 1) as u8)
+                        w.[<$pllX $d>]().set((pll_x_d.div - 1) as u8)
                     );
                     $rcc.[<$pllX cfgr>]().modify(|_, w| w.[<$pllX $d en>]().enabled());
                     Some(Hertz::from_raw($vco_ck / pll_x_d.div))
@@ -264,14 +264,14 @@ macro_rules! pll_setup {
                 let pll_x_n = pll_setup.vco_out_target / pll_setup.ref_ck;
 
                 // Write dividers
-                rcc.[< $pllX cfgr >]().modify(|_, w|
+                rcc.[< $pllX cfgr >]().modify(|_, w| unsafe {
                     w.[< $pllX m >]()
-                    .variant(pll_setup.pll_m as u8));  // ref prescaler
+                    .bits(pll_setup.pll_m as u8) });  // ref prescaler
 
                 // unsafe as not all values are permitted: see RM0492
                 assert!(pll_x_n >= PLL_N_MIN);
                 assert!(pll_x_n <= PLL_N_MAX);
-                rcc.[<$pllX divr>]().modify(|_, w| w.[<$pllX n>]().variant((pll_x_n - 1) as u16));
+                rcc.[<$pllX divr>]().modify(|_, w| unsafe { w.[<$pllX n>]().bits((pll_x_n - 1) as u16) });
 
                 let pll_x = pll_setup.pll_p.as_ref().or(pll_setup.pll_q.as_ref().or(pll_setup.pll_r.as_ref())).unwrap();
 
@@ -281,10 +281,10 @@ macro_rules! pll_setup {
                         // Calculate FRACN
                         let pll_x_fracn = calc_fracn(pll_setup.ref_ck as f32, pll_x_n as f32, pll_x.div as f32, pll_x.ck as f32);
                         //RCC_PLL1FRACR
-                        rcc.[<$pllX fracr>]().modify(|_, w| w.[<$pllX fracn>]().variant(pll_x_fracn));
+                        rcc.[<$pllX fracr>]().modify(|_, w| w.[<$pllX fracn>]().set(pll_x_fracn));
                         // Latch FRACN by resetting and setting it
                         rcc.[<$pllX cfgr>]().modify(|_, w| w.[< $pllX fracen>]().reset() );
-                        rcc.[<$pllX cfgr>]().modify(|_, w| w.[< $pllX fracen>]().set() );
+                        rcc.[<$pllX cfgr>]().modify(|_, w| w.[< $pllX fracen>]().set_() );
 
                         calc_vco_ck(pll_setup.ref_ck, pll_x_n, pll_x_fracn)
                     },

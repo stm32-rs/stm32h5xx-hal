@@ -686,11 +686,11 @@ impl Rcc {
             w.mco1sel()
                 .variant(self.config.mco1.source)
                 .mco1pre()
-                .bits(mco_1_pre)
+                .set(mco_1_pre)
                 .mco2sel()
                 .variant(self.config.mco2.source)
                 .mco2pre()
-                .bits(mco_2_pre)
+                .set(mco_2_pre)
         });
 
         // HSE
@@ -748,7 +748,7 @@ impl Rcc {
 
         // Ensure core prescaler value is valid before future lower
         // core voltage
-        while rcc.cfgr2().read().hpre().variant() != Some(hpre_bits) {}
+        while rcc.cfgr2().read().hpre().variant() != hpre_bits {}
 
         // Peripheral Clock (per_ck)
         rcc.ccipr5().modify(|_, w| w.ckpersel().variant(ckpersel));
