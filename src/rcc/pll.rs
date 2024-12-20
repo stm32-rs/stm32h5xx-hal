@@ -151,8 +151,7 @@ fn vco_output_divider_setup(
 
     // Input divisor, resulting in a reference clock in the
     // range 2 to 16 MHz.
-    let pll_x_m_min =
-        pllsrc.div_ceil(*range.input_range.end());
+    let pll_x_m_min = pllsrc.div_ceil(*range.input_range.end());
     let pll_x_m_max = (pllsrc / range.input_range.start()).min(PLL_M_MAX);
 
     // Iterative search for the lowest m value that minimizes
