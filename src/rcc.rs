@@ -413,7 +413,7 @@ macro_rules! ppre_calculate {
                 .unwrap_or($hclk);
 
             // Calculate suitable divider
-            let ($bits, $ppre) = match ($hclk + $pclk - 1) / $pclk
+            let ($bits, $ppre) = match $hclk.div_ceil($pclk)
             {
                 0 => unreachable!(),
                 1 => (PPRE::Div1, 1 as u8),
@@ -618,7 +618,7 @@ impl Rcc {
 
         // Estimate divisor
         let (hpre_bits, hpre_div) =
-            match (sys_ck.raw() + rcc_hclk - 1) / rcc_hclk {
+            match sys_ck.raw().div_ceil(rcc_hclk) {
                 0 => unreachable!(),
                 1 => (HPRE::Div1, 1),
                 2 => (HPRE::Div2, 2),

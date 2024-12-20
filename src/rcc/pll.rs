@@ -129,8 +129,7 @@ fn vco_output_divider_setup(
     let vco_out_target = max_output * min_div;
 
     let vco_out_target = if (vco_out_target / min_output) > PLL_OUT_DIV_MAX {
-        let f = ((vco_out_target / min_output) + PLL_OUT_DIV_MAX - 1)
-            / PLL_OUT_DIV_MAX;
+        let f = (vco_out_target / min_output).div_ceil(PLL_OUT_DIV_MAX);
         vco_out_target / f
     } else {
         vco_out_target
@@ -153,7 +152,7 @@ fn vco_output_divider_setup(
     // Input divisor, resulting in a reference clock in the
     // range 2 to 16 MHz.
     let pll_x_m_min =
-        (pllsrc + range.input_range.end() - 1) / range.input_range.end();
+        pllsrc.div_ceil(*range.input_range.end());
     let pll_x_m_max = (pllsrc / range.input_range.start()).min(PLL_M_MAX);
 
     // Iterative search for the lowest m value that minimizes
