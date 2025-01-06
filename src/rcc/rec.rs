@@ -129,8 +129,8 @@ macro_rules! peripheral_reset_and_enable_control {
         $(
             $( #[ $pmeta:meta ] )*
                 $(($NoReset:ident))? $p:ident
-                $([ kernel $clk:ident: $pk:ident $(($Variant:ident))* $ccip:ident $clk_doc:expr ])*
-                $([ group clk: $pk_g:ident $( $(($Variant_g:ident))* $ccip_g:ident $clk_doc_g:expr )* ])*
+                $([ kernel $clk:ident: $pk:ident $(($Variant:ident))* $pk_alias:ident $ccip:ident $clk_doc:expr ])*
+                $([ group clk: $pk_g:ident $( $(($Variant_g:ident))* $pk_g_alias:ident $ccip_g:ident $clk_doc_g:expr )* ])*
                 $([ fixed clk: $clk_doc_f:expr ])*
         ),*
     ];)+) => {
@@ -177,10 +177,10 @@ macro_rules! peripheral_reset_and_enable_control {
                         $AXBn, $(($NoReset))* $p, [< $p:upper >], [< $p:lower >],
                         $( $pmeta )*
                         $(
-                            [kernel $clk: $pk $(($Variant))* $ccip $clk_doc]
+                            [kernel $clk: $pk $(($Variant))* $pk_alias $ccip $clk_doc]
                         )*
                         $(
-                            [group clk: $pk_g [< $pk_g:lower >] $( $(($Variant_g))* $ccip_g $clk_doc_g )* ]
+                            [group clk: $pk_g [< $pk_g:lower >] $( $(($Variant_g))* $pk_g_alias $ccip_g $clk_doc_g )* ]
                         )*
                         $(
                             [fixed clk: $clk_doc_f]
@@ -230,8 +230,8 @@ macro_rules! peripheral_reset_and_enable_control_generator {
         $p_lower:ident,         // comments, equivalent to with the paste macro.
 
         $( $pmeta:meta )*
-        $([ kernel $clk:ident: $pk:ident $(($Variant:ident))* $ccip:ident $clk_doc:expr ])*
-        $([ group clk: $pk_g:ident $pk_g_lower:ident $( $(($Variant_g:ident))* $ccip_g:ident $clk_doc_g:expr )* ])*
+        $([ kernel $clk:ident: $pk:ident $(($Variant:ident))* $pk_alias:ident $ccip:ident $clk_doc:expr ])*
+        $([ group clk: $pk_g:ident $pk_g_lower:ident $( $(($Variant_g:ident))* $pk_g_alias:ident $ccip_g:ident $clk_doc_g:expr )* ])*
         $([ fixed clk: $clk_doc_f:expr ])*
     ) => {
         paste::item! {
@@ -388,7 +388,7 @@ macro_rules! peripheral_reset_and_enable_control_generator {
                 #[doc=$clk_doc]
                 /// kernel clock source selection
                 pub type [< $pk ClkSel >] =
-                    rcc::[< $ccip >]::[< $pk:upper SEL >];
+                    rcc::[< $ccip >]::[< $pk_alias SEL >];
             )*
             $(          // Group kernel clocks
                 impl [< $pk_g ClkSelGetter >] for $p {}
@@ -398,7 +398,7 @@ macro_rules! peripheral_reset_and_enable_control_generator {
                     #[doc=$clk_doc_g]
                     /// kernel clock source selection.
                     pub type [< $pk_g ClkSel >] =
-                        rcc::[< $ccip_g >]::[< $pk_g:upper SEL >];
+                        rcc::[< $ccip_g >]::[< $pk_g_alias SEL >];
 
                     /// Can return
                     #[doc=$clk_doc_g]
@@ -508,8 +508,8 @@ peripheral_reset_and_enable_control! {
     ];
     #[cfg(feature = "rm0492")]
     AHB2, "" => [
-        Rng [kernel clk: Rng ccipr5 "RNG"],
-        Adc [group clk: AdcDac(Variant) ccipr5 "ADC/DAC"],
+        Rng [kernel clk: Rng RNG ccipr5 "RNG"],
+        Adc [group clk: AdcDac(Variant) ADCDAC ccipr5 "ADC/DAC"],
         Dac12 [group clk: AdcDac]
     ];
 
@@ -522,16 +522,16 @@ peripheral_reset_and_enable_control! {
     ];
     #[cfg(feature = "rm0492")]
     APB1L, "" => [
-        I3c1 [kernel clk: I3c1(Variant) ccipr4 "I3C1"],
+        I3c1 [kernel clk: I3c1(Variant) I3C ccipr4 "I3C1"],
 
-        I2c1 [kernel clk: I2c1 ccipr4 "I2C1"],
-        I2c2 [kernel clk: I2c2 ccipr4 "I2C2"],
+        I2c1 [kernel clk: I2c1 I2C ccipr4 "I2C1"],
+        I2c2 [kernel clk: I2c2 I2C ccipr4 "I2C2"],
 
-        Usart2 [kernel clk: Usart2(Variant) ccipr1 "USART2"],
-        Usart3 [kernel clk: Usart3(Variant) ccipr1 "USART3"],
+        Usart2 [kernel clk: Usart2(Variant) USART ccipr1 "USART2"],
+        Usart3 [kernel clk: Usart3(Variant) USART ccipr1 "USART3"],
 
-        Spi2 [kernel clk: Spi2(Variant) ccipr3 "SPI2"],
-        Spi3 [kernel clk: Spi3(Variant) ccipr3 "SPI3"],
+        Spi2 [kernel clk: Spi2(Variant) SPI123 ccipr3 "SPI2"],
+        Spi3 [kernel clk: Spi3(Variant) SPI123 ccipr3 "SPI3"],
         Opamp,
         Comp
     ];
@@ -542,8 +542,8 @@ peripheral_reset_and_enable_control! {
     ];
     #[cfg(feature = "rm0492")]
     APB1H, "" => [
-        Lptim2 [kernel clk: Lptim2(Variant) ccipr2 "LPTIM2"],
-        Fdcan [kernel clk: Fdcan(Variant) ccipr5 "FDCAN"]
+        Lptim2 [kernel clk: Lptim2(Variant) LPTIM ccipr2 "LPTIM2"],
+        Fdcan [kernel clk: Fdcan(Variant) FDCAN ccipr5 "FDCAN"]
     ];
 
     #[cfg(all())]
@@ -552,9 +552,9 @@ peripheral_reset_and_enable_control! {
     ];
     #[cfg(feature = "rm0492")]
     APB2, "" => [
-        Usb [kernel clk: Usb ccipr4 "USB"],
-        Usart1 [kernel clk: Usart1(Variant) ccipr1 "USART1"],
-        Spi1 [kernel clk: Spi1(Variant) ccipr3 "SPI1"]
+        Usb [kernel clk: Usb USB ccipr4 "USB"],
+        Usart1 [kernel clk: Usart1(Variant) USART ccipr1 "USART1"],
+        Spi1 [kernel clk: Spi1(Variant) SPI123 ccipr3 "SPI1"]
     ];
 
     #[cfg(all())]
@@ -564,9 +564,9 @@ peripheral_reset_and_enable_control! {
     ];
     #[cfg(feature = "rm0492")]
     APB3, "" => [
-        I3c2 [kernel clk: I3c2(Variant) ccipr4 "I3C2"],
-        LpTim1 [kernel clk: LpTim1(Variant) ccipr2 "LPTIM1"],
-        LpUart1 [kernel clk: LpUart1(Variant) ccipr3 "LPUART1"]
+        I3c2 [kernel clk: I3c2(Variant) I3C ccipr4 "I3C2"],
+        LpTim1 [kernel clk: LpTim1(Variant) LPTIM ccipr2 "LPTIM1"],
+        LpUart1 [kernel clk: LpUart1(Variant) USART ccipr3 "LPUART1"]
     ];
 
 }

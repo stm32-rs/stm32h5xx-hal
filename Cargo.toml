@@ -44,7 +44,7 @@ log-semihost = ["log"]
 
 [dependencies]
 cortex-m = { version = "^0.7.7", features = ["critical-section-single-core"] }
-stm32h5 = "0.15.1"
+stm32h5 = { package = "stm32h5-staging", version = "0.17.0" }
 fugit = "0.3.7"
 embedded-hal = "1.0.0"
 defmt = { version = "0.3.8", optional = true }
