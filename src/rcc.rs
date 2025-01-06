@@ -806,10 +806,10 @@ impl Rcc {
             let cfgr2 = rcc.cfgr2().read();
             debug!(
                 "CFGR2 register: HPRE={:?} PPRE1={:?} PPRE2={:?} PPRE3={:?}",
-                cfgr2.hpre().variant().unwrap(),
-                cfgr2.ppre1().variant().unwrap(),
-                cfgr2.ppre2().variant().unwrap(),
-                cfgr2.ppre3().variant().unwrap(),
+                cfgr2.hpre().variant(),
+                cfgr2.ppre1().variant(),
+                cfgr2.ppre2().variant(),
+                cfgr2.ppre3().variant(),
             );
 
             let pll1cfgr = rcc.pll1cfgr().read();
