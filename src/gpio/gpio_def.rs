@@ -145,11 +145,11 @@ mod h503 {
     }
 }
 
-#[cfg(feature = "gpio-h5x")]
-pub use h5x::*;
+#[cfg(feature = "gpio-h56x_h573")]
+pub use h56x_h573::*;
 
-#[cfg(feature = "gpio-h5x")]
-mod h5x {
+#[cfg(feature = "gpio-h56x_h573")]
+mod h56x_h573 {
     use super::Gpio;
 
     impl<const P: char> Gpio<P> {

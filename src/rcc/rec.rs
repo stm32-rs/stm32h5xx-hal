@@ -523,11 +523,14 @@ peripheral_reset_and_enable_control! {
     ];
     #[cfg(feature = "rm0481")]
     AHB2, "" => [
-        Gpioi,
         Gpiog,
         Gpiof,
         Gpioe,
         Dac1 [group clk: AdcDac]
+    ];
+    #[cfg(feature = "h56x_h573")]
+    AHB2, "" => [
+        Gpioi
     ];
 
     #[cfg(feature = "rm0481")]
@@ -566,15 +569,19 @@ peripheral_reset_and_enable_control! {
     ];
     #[cfg(feature = "rm0481")]
     APB1L, "" => [
-        Uart8 [kernel clk: Uart8(Variant) USART ccipr1 "UART8"],
-        Uart7 [kernel clk: Uart7(Variant) USART ccipr1 "UART7"],
         Cec [kernel clk: Cec(Variant) CEC ccipr5 "CEC"],
-        Usart11 [kernel clk: Usart11(Variant) USART ccipr2 "USART11"],
-        Usart10 [kernel clk: Usart10(Variant) USART ccipr1 "USART10"],
         Usart6 [kernel clk: Usart6(Variant) USART ccipr1 "USART6"],
         Uart5 [kernel clk: Uart5(Variant) USART ccipr1 "USART5"],
         Uart4 [kernel clk: Uart4(Variant) USART ccipr1 "USART4"],
-        Tim14, Tim13, Tim12, Tim5, Tim4
+        Tim12, Tim5, Tim4
+    ];
+    #[cfg(feature = "h56x_h573")]
+    APB1L, "" => [
+        Uart8 [kernel clk: Uart8(Variant) USART ccipr1 "UART8"],
+        Uart7 [kernel clk: Uart7(Variant) USART ccipr1 "UART7"],
+        Usart11 [kernel clk: Usart11(Variant) USART ccipr2 "USART11"],
+        Usart10 [kernel clk: Usart10(Variant) USART ccipr1 "USART10"],
+        Tim14, Tim13
     ];
 
     #[cfg(all())]
@@ -585,7 +592,10 @@ peripheral_reset_and_enable_control! {
     ];
     #[cfg(feature = "rm0481")]
     APB1H, "" => [
-        Ucpd1,
+        Ucpd1
+    ];
+    #[cfg(feature = "h56x_h573")]
+    APB1H, "" => [
         Uart12 [kernel clk: Uart12(Variant) USART ccipr2 "USART12"],
         Uart9 [kernel clk: Uart9(Variant) USART ccipr1 "UART9"]
     ];
@@ -601,29 +611,38 @@ peripheral_reset_and_enable_control! {
     APB2, "" => [
         Sai2 [kernel clk: Sai2(Variant) SAI ccipr5 "SAI2"],
         Sai1 [kernel clk: Sai1(Variant) SAI ccipr5 "SAI1"],
-        Spi6 [kernel clk: Spi6(Variant) SPI456 ccipr3 "SPI6"],
         Spi4 [kernel clk: Spi4(Variant) SPI456 ccipr3 "SPI4"],
-        Tim17, Tim16, Tim15, Tim8
+        Tim15, Tim8
+    ];
+    #[cfg(feature = "h56x_h573")]
+    APB2, "" => [
+        Spi6 [kernel clk: Spi6(Variant) SPI456 ccipr3 "SPI6"],
+        Tim17, Tim16
     ];
 
     #[cfg(all())]
     APB3, "Advanced Peripheral Bus 3 (APB3) peripherals" => [
         (NoReset) RtcApb,
         LpTim1 [kernel clk: LpTim1(Variant) LPTIM ccipr2 "LPTIM1"],
-        I3c2 [kernel clk: I3c2(Variant) I3C ccipr4 "I3C2"],
         LpUart1 [kernel clk: LpUart1(Variant) USART ccipr3 "LPUART1"],
         (NoReset) Sbs
     ];
     #[cfg(feature = "rm0481")]
     APB3, "" => [
         Vref,
+        I2c3 [kernel clk: I2c3 I2C ccipr4 "I2C3"]
+    ];
+    #[cfg(feature = "h56x_h573")]
+    APB3, "" => [
         LpTim6 [kernel clk: LpTim6(Variant) LPTIM ccipr2 "LPTIM6"],
         LpTim5 [kernel clk: LpTim5(Variant) LPTIM ccipr2 "LPTIM5"],
         LpTim4 [kernel clk: LpTim4(Variant) LPTIM ccipr2 "LPTIM4"],
         LpTim3 [kernel clk: LpTim3(Variant) LPTIM ccipr2 "LPTIM3"],
         I2c4 [kernel clk: I2c4 I2C ccipr4 "I2C4"],
-        I2c3 [kernel clk: I2c3 I2C ccipr4 "I2C3"],
         Spi5 [kernel clk: Spi5(Variant) SPI456 ccipr3 "SPI5"]
     ];
-
+    #[cfg(any(feature = "rm0492", feature = "h523_h533"))]
+    APB3, "" => [
+        I3c2 [kernel clk: I3c2(Variant) I3C ccipr4 "I3C2"]
+    ];
 }
