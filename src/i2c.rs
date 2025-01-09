@@ -437,15 +437,15 @@ impl<I2C: Instance> I2c<I2C> {
             calc_timing_params(i2c_ker_ck, freq);
         i2c.timingr().write(|w| {
             w.presc()
-                .bits(presc_reg)
+                .set(presc_reg)
                 .scll()
-                .bits(scll)
+                .set(scll)
                 .sclh()
-                .bits(sclh)
+                .set(sclh)
                 .sdadel()
-                .bits(sdadel)
+                .set(sdadel)
                 .scldel()
-                .bits(scldel)
+                .set(scldel)
         });
 
         // Enable the peripheral and analog filter
@@ -534,7 +534,7 @@ impl<I2C: Instance> Inner<I2C> {
     fn flush_txdr(&mut self) {
         // If a pending TXIS flag is set, write dummy data to TXDR
         if self.i2c.isr().read().txis().bit_is_set() {
-            self.i2c.txdr().write(|w| w.txdata().bits(0));
+            self.i2c.txdr().write(|w| w.txdata().set(0));
         }
 
         // If TXDR is not flagged as empty, write 1 to flush it
@@ -582,7 +582,7 @@ impl<I2C: Instance> Inner<I2C> {
         self.check_clear_target_nack(&isr)?;
 
         if isr.txis().is_empty() {
-            self.i2c.txdr().write(|w| w.txdata().bits(data));
+            self.i2c.txdr().write(|w| w.txdata().set(data));
             Ok(())
         } else {
             Err(nb::Error::WouldBlock)
@@ -657,7 +657,7 @@ impl<I2C: Instance> I2c<I2C> {
             w.rd_wrn()
                 .bit(direction == Direction::Read)
                 .nbytes()
-                .bits(length as u8)
+                .set(length as u8)
                 .start()
                 .start()
                 .autoend()
@@ -667,9 +667,9 @@ impl<I2C: Instance> I2c<I2C> {
                 .add10()
                 .bit(address_mode == AddressMode::AddressMode10bit);
             if address_mode == AddressMode::AddressMode10bit {
-                w.sadd().bits(addr).head10r().complete();
+                w.sadd().set(addr).head10r().complete();
             } else {
-                w.sadd().bits(addr << 1);
+                w.sadd().set(addr << 1);
             }
             w
         });
@@ -695,7 +695,7 @@ impl<I2C: Instance> I2c<I2C> {
             w.rd_wrn()
                 .bit(direction == Direction::Read)
                 .nbytes()
-                .bits(length as u8)
+                .set(length as u8)
                 .start()
                 .start()
                 .autoend()
@@ -705,9 +705,9 @@ impl<I2C: Instance> I2c<I2C> {
                 .add10()
                 .bit(address_mode == AddressMode::AddressMode10bit);
             if address_mode == AddressMode::AddressMode10bit {
-                w.sadd().bits(addr).head10r().partial();
+                w.sadd().set(addr).head10r().partial();
             } else {
-                w.sadd().bits(addr << 1);
+                w.sadd().set(addr << 1);
             }
             w
         });
@@ -725,7 +725,7 @@ impl<I2C: Instance> I2c<I2C> {
             w.rd_wrn()
                 .bit(direction == Direction::Read)
                 .nbytes()
-                .bits(length as u8)
+                .set(length as u8)
                 .autoend()
                 .bit(stop == Stop::Automatic)
                 .reload()
