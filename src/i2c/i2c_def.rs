@@ -36,10 +36,10 @@ macro_rules! i2c {
                     let ccipr4 = unsafe { (*stm32::RCC::ptr()).ccipr4().read() };
 
                     match ccipr4.[<$I2CX:lower sel>]().variant() {
-                        ccipr4::[<$I2CX SEL>]::$Pclk => Some(clocks.$pclk()),
-                        ccipr4::[<$I2CX SEL>]::Pll2R => clocks.pll2_r_ck(),
-                        ccipr4::[<$I2CX SEL>]::HsiKer => clocks.hsi_ck(),
-                        ccipr4::[<$I2CX SEL>]::CsiKer => clocks.csi_ck(),
+                        ccipr4::I2CSEL::$Pclk => Some(clocks.$pclk()),
+                        ccipr4::I2CSEL::Pll2R => clocks.pll2_r_ck(),
+                        ccipr4::I2CSEL::HsiKer => clocks.hsi_ck(),
+                        ccipr4::I2CSEL::CsiKer => clocks.csi_ck(),
                     }.expect("Source clock not enabled")
                 }
 
@@ -91,6 +91,6 @@ mod rm492 {
             ]
     }
 
-    i2c! { I2C1: I2c1, RccPclk1, pclk1 }
-    i2c! { I2C2: I2c2, RccPclk1, pclk1 }
+    i2c! { I2C1: I2c1, Pclk, pclk1 }
+    i2c! { I2C2: I2c2, Pclk, pclk1 }
 }
