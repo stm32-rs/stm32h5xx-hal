@@ -459,8 +459,7 @@ impl<I2C: Instance> I2c<I2C> {
     /// Reset the peripheral
     pub fn reset(&mut self) {
         self.i2c.cr1().modify(|_, w| w.pe().disabled());
-        let _ = self.i2c.cr1().read();
-        let _ = self.i2c.cr1().read(); // Delay 2 peripheral clocks
+        interrupt_clear_clock_sync_delay!(self.i2c.cr1());
         while self.i2c.cr1().read().pe().is_enabled() {}
         self.i2c.cr1().modify(|_, w| w.pe().enabled());
     }
@@ -477,8 +476,6 @@ impl<I2C: Instance> I2c<I2C> {
             Event::NotAcknowledge => w.nackie().enabled(),
             Event::AddressMatch => w.addrie().enabled(),
         });
-        let _ = self.i2c.cr1().read();
-        let _ = self.i2c.cr1().read(); // Delay 2 peripheral clocks
     }
 
     /// Stop listening for interrupt `event`
@@ -493,8 +490,7 @@ impl<I2C: Instance> I2c<I2C> {
             Event::NotAcknowledge => w.nackie().disabled(),
             Event::AddressMatch => w.addrie().disabled(),
         });
-        let _ = self.i2c.cr1().read();
-        let _ = self.i2c.cr1().read(); // Delay 2 peripheral clocks
+        interrupt_clear_clock_sync_delay!(self.i2c.cr1());
     }
 
     /// Clears interrupt flag for `event`
@@ -506,8 +502,7 @@ impl<I2C: Instance> I2c<I2C> {
             Event::NotAcknowledge => w.nackcf().clear(),
             _ => w,
         });
-        let _ = self.i2c.isr().read();
-        let _ = self.i2c.isr().read(); // Delay 2 peripheral clocks
+        interrupt_clear_clock_sync_delay!(self.i2c.cr1());
     }
 
     /// Check if the specified `event`` occurred. If an error occurred, this
