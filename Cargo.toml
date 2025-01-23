@@ -61,6 +61,7 @@ cortex-m = { version = "^0.7.7", features = ["critical-section-single-core"] }
 stm32h5 = { package = "stm32h5-staging", version = "0.18.1" }
 fugit = "0.3.7"
 embedded-hal = "1.0.0"
+embedded-hal-nb = "1.0.0"
 defmt = { version = "0.3.8", optional = true }
 paste = "1.0.15"
 log = { version = "0.4.20", optional = true}
