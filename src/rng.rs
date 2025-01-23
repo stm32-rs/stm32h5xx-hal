@@ -62,7 +62,8 @@ impl RngExt for RNG {
         // See RM0433 Rev 6 Section 33.3.6
         assert!(rng_clk > hclk / 32, "RNG: Clock too slow");
 
-        self.cr().modify(|_, w| w.ced().clear_bit().rngen().set_bit());
+        self.cr()
+            .modify(|_, w| w.ced().clear_bit().rngen().set_bit());
 
         Rng { rb: self }
     }
