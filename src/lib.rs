@@ -7,6 +7,7 @@ compile_error!(
     "This crate requires one of the following device features enabled:
         stm32h503
         stm32h523
+        stm32h533
         stm32h562
         stm32h563
         stm32h573
@@ -21,6 +22,9 @@ pub use stm32h5::stm32h503 as stm32;
 
 #[cfg(feature = "stm32h523")]
 pub use stm32h5::stm32h523 as stm32;
+
+#[cfg(feature = "stm32h533")]
+pub use stm32h5::stm32h533 as stm32;
 
 #[cfg(feature = "stm32h562")]
 pub use stm32h5::stm32h562 as stm32;

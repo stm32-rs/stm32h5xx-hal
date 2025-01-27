@@ -146,10 +146,10 @@ mod h503 {
 }
 
 #[cfg(feature = "gpio-h56x_h573")]
-pub use h56x_h573::*;
+pub use h523_h533_h56x_h573::*;
 
 #[cfg(feature = "gpio-h56x_h573")]
-mod h56x_h573 {
+mod h523_h533_h56x_h573 {
     use super::Gpio;
 
     gpio!(GPIOA, gpioa, Gpioa, PA, 'A', PAn, [
@@ -330,6 +330,7 @@ mod h56x_h573 {
                 'F' => crate::pac::GPIOF::ptr() as _,
                 'G' => crate::pac::GPIOG::ptr() as _,
                 'H' => crate::pac::GPIOH::ptr() as _,
+                #[cfg(feature = "h56x_h573")]
                 'I' => crate::pac::GPIOI::ptr() as _,
                 _ => panic!("Unknown GPIO port"),
             }
