@@ -43,6 +43,7 @@ sdmmc2 = []                 # Only STM32H563/73 have SDMMC2
 
 rt = ["stm32h5/rt"]
 stm32h503 = ["stm32h5/stm32h503", "device-selected", "rm0492"]
+stm32h523 = ["stm32h5/stm32h523", "device-selected", "rm0481", "h523_h533"]
 stm32h562 = ["stm32h5/stm32h562", "device-selected", "rm0481", "h56x_h573"]
 stm32h563 = ["stm32h5/stm32h563", "device-selected", "rm0481", "h56x_h573", "sdmmc2", "ethernet"]
 stm32h573 = ["stm32h5/stm32h573", "device-selected", "rm0481", "h56x_h573", "otfdec", "sdmmc2", "ethernet"]
@@ -55,7 +56,8 @@ log-semihost = ["log"]
 
 [dependencies]
 cortex-m = { version = "^0.7.7", features = ["critical-section-single-core"] }
-stm32h5 = { package = "stm32h5-staging", version = "0.17.0" }
+stm32h5 = { git = "https://github.com/stm32-rs/stm32-rs-nightlies" }
+#stm32h5 = { package = "stm32h5-staging", version = "0.17.0" }
 fugit = "0.3.7"
 embedded-hal = "1.0.0"
 defmt = { version = "0.3.8", optional = true }
