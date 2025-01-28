@@ -167,7 +167,7 @@ pub struct PushPull;
 /// Analog mode (type state)
 pub struct Analog;
 
-/// JTAG/SWD mote (type state)
+/// JTAG/SWD mode (type state)
 pub type Debugger = Alternate<0, PushPull>;
 
 mod marker {

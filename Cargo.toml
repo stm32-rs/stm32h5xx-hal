@@ -29,11 +29,12 @@ rm0481 = []                 # STM32H52x/6x/7x
 
 # Different subfamily groups have different selections of identical peripherals
 h56x_h573 = ["gpio-h56x_h573"]         # STM32H56x/STM32H573
-h523_h533 = ["gpio-h56x_h573"]         # STM32H523/STM32H533
+h523_h533 = ["gpio-h523_h533"]         # STM32H523/STM32H533
 
 # Different subfamily groups have different GPIOs available and different alternate functions
 # available
 gpio-h503 = []
+gpio-h523_h533 = []
 gpio-h56x_h573 = []
 
 # Some peripherals are only present on specific MCUs within a subfamily group
