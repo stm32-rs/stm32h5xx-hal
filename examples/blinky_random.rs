@@ -13,7 +13,6 @@ use stm32h5xx_hal::{
     delay::Delay,
     pac,
     prelude::*,
-    rng::{RngCore, RngExt},
 };
 #[macro_use]
 mod utilities;

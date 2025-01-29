@@ -3,7 +3,7 @@
 //!
 //! # Examples
 //!
-//! - [Random Blinky](https://github.com/stm32-rs/stm32h7xx-hal/blob/master/examples/blinky_random.rs)
+//! - [Random Blinky](https://github.com/stm32-rs/stm32h5xx-hal/blob/master/examples/blinky_random.rs)
 
 use core::cmp;
 use core::mem;
@@ -20,32 +20,27 @@ pub enum ErrorKind {
     SeedError = 1,
 }
 
-pub trait KerClk {
-    /// Return the kernel clock for the Random Number Generator
-    ///
-    /// # Panics
-    ///
-    /// Panics if the kernel clock is not running
-    fn kernel_clk_unwrap(prec: rec::Rng, clocks: &CoreClocks) -> Hertz;
-}
-
-impl KerClk for RNG {
-    fn kernel_clk_unwrap(prec: rec::Rng, clocks: &CoreClocks) -> Hertz {
-        match prec.get_kernel_clk_mux() {
-            //RngClkSel::Hsi48 => {
-            RngClkSel::Hsi48Ker => {
-                clocks.hsi48_ck().expect("RNG: HSI48 must be enabled")
-            }
-            RngClkSel::Pll1Q => {
-                clocks.pll1_q_ck().expect("RNG: PLL1_Q must be enabled")
-            }
-            RngClkSel::Lse => unimplemented!(),
-            RngClkSel::Lsi => {
-                clocks.lsi_ck().expect("RNG: LSI must be enabled")
-            }
+/// Return the kernel clock for the Random Number Generator
+///
+/// # Panics
+///
+/// Panics if the kernel clock is not running
+fn kernel_clk_unwrap(prec: rec::Rng, clocks: &CoreClocks) -> Hertz {
+    match prec.get_kernel_clk_mux() {
+        //RngClkSel::Hsi48 => {
+        RngClkSel::Hsi48Ker => {
+            clocks.hsi48_ck().expect("RNG: HSI48 must be enabled")
+        }
+        RngClkSel::Pll1Q => {
+            clocks.pll1_q_ck().expect("RNG: PLL1_Q must be enabled")
+        }
+        RngClkSel::Lse => unimplemented!(),
+        RngClkSel::Lsi => {
+            clocks.lsi_ck().expect("RNG: LSI must be enabled")
         }
     }
 }
+
 
 pub trait RngExt {
     fn constrain(self, prec: rec::Rng, clocks: &CoreClocks) -> Rng;
@@ -56,7 +51,7 @@ impl RngExt for RNG {
         let prec = prec.enable().reset();
 
         let hclk = clocks.hclk();
-        let rng_clk = Self::kernel_clk_unwrap(prec, clocks);
+        let rng_clk = kernel_clk_unwrap(prec, clocks);
 
         // Otherwise clock checker will always flag an error
         // See RM0433 Rev 6 Section 33.3.6
@@ -91,6 +86,25 @@ impl Rng {
             }
             if status.drdy().bit() {
                 return Ok(self.rb.dr().read().rndata().bits());
+            }
+        }
+    }
+    
+    /// Returns 32 bits of randomness, or error
+    pub fn nb_value(&mut self) -> nb::Result<u32, ErrorKind> {
+        loop {
+            let status = self.rb.sr().read();
+            if status.cecs().bit() {
+                return Err(ErrorKind::ClockError);
+            }
+            if status.secs().bit() {
+                return Err(ErrorKind::SeedError);
+            }
+            if status.drdy().bit() {
+                return Ok(self.rb.dr().read().rndata().bits());
+            }
+            else {
+                return Err(nb::Error::WouldBlock);
             }
         }
     }
@@ -130,7 +144,7 @@ macro_rules! rng_core {
 
                 /// Fills buffer with random values, or return error
                 fn fill(&mut self, buffer: &mut [$type]) -> Result<(), ErrorKind> {
-                    const BATCH_SIZE: usize = 4 / mem::size_of::<$type>();
+                    const BATCH_SIZE: usize = mem::size_of::<u32>() / mem::size_of::<$type>();
                     let mut i = 0_usize;
                     while i < buffer.len() {
                         let random_word = self.value()?;
@@ -160,7 +174,7 @@ macro_rules! rng_core_large {
                     let mut res: $type = 0;
 
                     for i in 0..WORDS {
-                        res |= (self.value()? as $type) << (i * (mem::size_of::<u32>() * 8))
+                        res |= (self.value()? as $type) << (i * (u32::BITS as usize))
                     }
 
                     Ok(res)
@@ -258,6 +272,3 @@ impl rand_core::RngCore for Rng {
     }
 }
 
-#[cfg(feature = "rand")]
-#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-impl rand_core::CryptoRng for Rng {}

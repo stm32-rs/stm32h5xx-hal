@@ -9,3 +9,4 @@ pub use crate::rcc::RccExt as _stm32h5xx_hal_rcc_RccExt;
 
 pub use crate::time::U32Ext as _;
 pub use fugit::{ExtU32 as _, RateExtU32 as _};
+pub use crate::rng::{RngCore as _, RngExt as _};
