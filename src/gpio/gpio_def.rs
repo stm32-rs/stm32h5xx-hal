@@ -133,15 +133,13 @@ mod h503 {
 
     impl<const P: char> Gpio<P> {
         pub(crate) const fn ptr() -> *const crate::pac::gpioa::RegisterBlock {
-            const {
-                match P {
-                    'A' => crate::pac::GPIOA::ptr(),
-                    'B' => crate::pac::GPIOB::ptr() as _,
-                    'C' => crate::pac::GPIOC::ptr() as _,
-                    'D' => crate::pac::GPIOD::ptr() as _,
-                    'H' => crate::pac::GPIOH::ptr() as _,
-                    _ => panic!("Unknown GPIO port"),
-                }
+            match P {
+                'A' => crate::pac::GPIOA::ptr(),
+                'B' => crate::pac::GPIOB::ptr() as _,
+                'C' => crate::pac::GPIOC::ptr() as _,
+                'D' => crate::pac::GPIOD::ptr() as _,
+                'H' => crate::pac::GPIOH::ptr() as _,
+                _ => panic!("Unknown GPIO port"),
             }
         }
     }
@@ -292,18 +290,16 @@ mod h523_h533 {
 
     impl<const P: char> Gpio<P> {
         pub(crate) const fn ptr() -> *const crate::pac::gpioa::RegisterBlock {
-            const {
-                match P {
-                    'A' => crate::pac::GPIOA::ptr(),
-                    'B' => crate::pac::GPIOB::ptr() as _,
-                    'C' => crate::pac::GPIOC::ptr() as _,
-                    'D' => crate::pac::GPIOD::ptr() as _,
-                    'E' => crate::pac::GPIOE::ptr() as _,
-                    'F' => crate::pac::GPIOF::ptr() as _,
-                    'G' => crate::pac::GPIOG::ptr() as _,
-                    'H' => crate::pac::GPIOH::ptr() as _,
-                    _ => panic!("Unknown GPIO port"),
-                }
+            match P {
+                'A' => crate::pac::GPIOA::ptr(),
+                'B' => crate::pac::GPIOB::ptr() as _,
+                'C' => crate::pac::GPIOC::ptr() as _,
+                'D' => crate::pac::GPIOD::ptr() as _,
+                'E' => crate::pac::GPIOE::ptr() as _,
+                'F' => crate::pac::GPIOF::ptr() as _,
+                'G' => crate::pac::GPIOG::ptr() as _,
+                'H' => crate::pac::GPIOH::ptr() as _,
+                _ => panic!("Unknown GPIO port"),
             }
         }
     }
@@ -485,19 +481,17 @@ mod h56x_h573 {
 
     impl<const P: char> Gpio<P> {
         pub(crate) const fn ptr() -> *const crate::pac::gpioa::RegisterBlock {
-            const {
-                match P {
-                    'A' => crate::pac::GPIOA::ptr(),
-                    'B' => crate::pac::GPIOB::ptr() as _,
-                    'C' => crate::pac::GPIOC::ptr() as _,
-                    'D' => crate::pac::GPIOD::ptr() as _,
-                    'E' => crate::pac::GPIOE::ptr() as _,
-                    'F' => crate::pac::GPIOF::ptr() as _,
-                    'G' => crate::pac::GPIOG::ptr() as _,
-                    'H' => crate::pac::GPIOH::ptr() as _,
-                    'I' => crate::pac::GPIOI::ptr() as _,
-                    _ => panic!("Unknown GPIO port"),
-                }
+            match P {
+                'A' => crate::pac::GPIOA::ptr(),
+                'B' => crate::pac::GPIOB::ptr() as _,
+                'C' => crate::pac::GPIOC::ptr() as _,
+                'D' => crate::pac::GPIOD::ptr() as _,
+                'E' => crate::pac::GPIOE::ptr() as _,
+                'F' => crate::pac::GPIOF::ptr() as _,
+                'G' => crate::pac::GPIOG::ptr() as _,
+                'H' => crate::pac::GPIOH::ptr() as _,
+                'I' => crate::pac::GPIOI::ptr() as _,
+                _ => panic!("Unknown GPIO port"),
             }
         }
     }
