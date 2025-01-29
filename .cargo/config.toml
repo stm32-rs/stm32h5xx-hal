@@ -3,6 +3,7 @@ runner = 'probe-rs run --connect-under-reset'
 rustflags = [
   # LLD (shipped with the Rust toolchain) is used as the default linker
   "-C", "link-arg=-Tlink.x",
+  "-C", "link-arg=-Tdefmt.x",
 ]
 
 [build]
