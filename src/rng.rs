@@ -16,6 +16,7 @@ use crate::time::Hertz;
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ErrorKind {
+    ///Note: The clock error has no impact on generated random numbers that is the application can still read the RNG_DR register
     ClockError = 0,
     SeedError = 1,
 }
@@ -35,30 +36,161 @@ fn kernel_clk_unwrap(prec: rec::Rng, clocks: &CoreClocks) -> Hertz {
             clocks.pll1_q_ck().expect("RNG: PLL1_Q must be enabled")
         }
         RngClkSel::Lse => unimplemented!(),
-        RngClkSel::Lsi => {
-            clocks.lsi_ck().expect("RNG: LSI must be enabled")
-        }
+        RngClkSel::Lsi => clocks.lsi_ck().expect("RNG: LSI must be enabled"),
     }
 }
 
+fn setup_clocks(prec: rec::Rng, clocks: &CoreClocks) -> Hertz {
+    let prec = prec.enable().reset();
+
+    let hclk = clocks.hclk();
+    let rng_clk = kernel_clk_unwrap(prec, clocks);
+
+    // Otherwise clock checker will always flag an error
+    // See RM0481 Rev 2 Section 32.3.6
+    assert!(rng_clk > (hclk / 32), "RNG: Clock too slow");
+
+    rng_clk
+}
+
+#[cfg(any(
+    feature = "stm32h562",
+    feature = "stm32h563",
+    feature = "stm32h573",
+))]
+
+/// This uses the register values specified in AN4230 but have not
+/// performed the verification (buyer beware, users can/should do their own verification)
+/// Requires RNG to be disabled since some register values can only be written when RNGEN = 0
+pub trait RngNist {
+    fn rng_nist_st_an4230(self, prec: rec::Rng, clocks: &CoreClocks) -> Rng;
+}
+
+#[cfg(any(
+    feature = "stm32h562",
+    feature = "stm32h563",
+    feature = "stm32h573"
+))]
+impl RngNist for RNG {
+    /// This uses the register values specified in AN4230 but have not
+    /// performed the verification (buyer beware, users can/should do their own verification)
+    /// Requires RNG to be disabled since some register values can only be written when RNGEN = 0
+    fn rng_nist_st_an4230(self, prec: rec::Rng, clocks: &CoreClocks) -> Rng {
+        let rng_clk = setup_clocks(prec, clocks);
+
+        // ST has tested this configuration only with a RNG clock of 48MHz
+        assert_eq!(rng_clk, Hertz::MHz(48), "RNG: Clock not 48 MHz");
+
+        // Set control register values, also need to write 1 to CONDRST to be able to set the other values
+        self.cr()
+            .write(|w| unsafe { w.bits(0x00F00E00).condrst().set_bit() });
+
+        // Set health test control register values
+        self.htcr().write(|w| unsafe { w.bits(0x6A91) });
+
+        // Set noise source control register
+        self.nscr().write(|w| unsafe { w.bits(0x3AF66) });
+
+        // Configuration done, reset CONDRST, its value goes to 0 when the reset process is
+        // done. It takes about 2 AHB clock cycles + 2 RNG clock cycles.
+        self.cr().write(|w| w.condrst().clear_bit());
+
+        // It should take about 2 AHB clock cycles + 2 RNG clock cycles
+        while self.cr().read().condrst().bit_is_set() {}
+
+        // Enable RNG
+        self.cr().modify(|_, w| w.rngen().set_bit());
+
+        Rng { rb: self }
+    }
+}
 
 pub trait RngExt {
-    fn constrain(self, prec: rec::Rng, clocks: &CoreClocks) -> Rng;
+    fn rng(self, prec: rec::Rng, clocks: &CoreClocks) -> Rng;
+    fn rng_fast(self, prec: rec::Rng, clocks: &CoreClocks) -> Rng;
 }
 
 impl RngExt for RNG {
-    fn constrain(self, prec: rec::Rng, clocks: &CoreClocks) -> Rng {
-        let prec = prec.enable().reset();
+    /// This uses the register values specified in RM0481 Rev 2 section 32.6.2 RNG configuration C
+    fn rng(self, prec: rec::Rng, clocks: &CoreClocks) -> Rng {
+        setup_clocks(prec, clocks);
 
-        let hclk = clocks.hclk();
-        let rng_clk = kernel_clk_unwrap(prec, clocks);
+        // Set control register values, also need to write 1 to CONDRST to be able to set the other values
+        self.cr().write(|w| unsafe {
+            w.nistc()
+                .clear_bit()
+                .rng_config1()
+                .bits(0x0F)
+                .clkdiv()
+                .bits(0x0)
+                .rng_config2()
+                .bits(0x0)
+                .rng_config3()
+                .bits(0xD)
+                .ced()
+                .clear_bit()
+                .condrst()
+                .set_bit()
+        });
 
-        // Otherwise clock checker will always flag an error
-        // See RM0433 Rev 6 Section 33.3.6
-        assert!(rng_clk > hclk / 32, "RNG: Clock too slow");
+        // Set health test control register values
+        self.htcr().write(|w| unsafe { w.bits(0xAAC7) });
 
-        self.cr()
-            .modify(|_, w| w.ced().clear_bit().rngen().set_bit());
+        // Set noise source control register
+        #[cfg(not(feature = "stm32h503"))] // Not available on H503
+        self.nscr().write(|w| unsafe { w.bits(0x0003FFFF) });
+
+        // Configuration done, reset CONDRST, its value goes to 0 when the reset process is
+        // done. It takes about 2 AHB clock cycles + 2 RNG clock cycles.
+        self.cr().write(|w| w.condrst().clear_bit());
+
+        // It should take about 2 AHB clock cycles + 2 RNG clock cycles
+        while self.cr().read().condrst().bit_is_set() {}
+
+        // Enable RNG
+        self.cr().modify(|_, w| w.rngen().set_bit());
+
+        Rng { rb: self }
+    }
+
+    /// This uses the register values specified in RM0481 Rev 2 section 32.6.2 RNG configuration B
+    fn rng_fast(self, prec: rec::Rng, clocks: &CoreClocks) -> Rng {
+        setup_clocks(prec, clocks);
+
+        // Set control register values, also need to write 1 to CONDRST to be able to set the other values
+        self.cr().write(|w| unsafe {
+            w.nistc()
+                .set_bit()
+                .rng_config1()
+                .bits(0x18)
+                .clkdiv()
+                .bits(0x0)
+                .rng_config2()
+                .bits(0x0)
+                .rng_config3()
+                .bits(0x0)
+                .ced()
+                .clear_bit()
+                .condrst()
+                .set_bit()
+        });
+
+        // Set health test control register values
+        self.htcr().write(|w| unsafe { w.bits(0xAAC7) });
+
+        // Set noise source control register
+        #[cfg(not(feature = "stm32h503"))] // Not available on H503
+        self.nscr().write(|w| unsafe { w.bits(0x0003FFFF) });
+
+        // Configuration done, reset CONDRST, its value goes to 0 when the reset process is
+        // done. It takes about 2 AHB clock cycles + 2 RNG clock cycles.
+        self.cr().write(|w| w.condrst().clear_bit());
+
+        // It should take about 2 AHB clock cycles + 2 RNG clock cycles
+        while self.cr().read().condrst().bit_is_set() {}
+
+        // Enable RNG
+        self.cr().modify(|_, w| w.rngen().set_bit());
 
         Rng { rb: self }
     }
@@ -76,36 +208,20 @@ pub struct Rng {
 impl Rng {
     /// Returns 32 bits of randomness, or error
     pub fn value(&mut self) -> Result<u32, ErrorKind> {
-        loop {
-            let status = self.rb.sr().read();
-            if status.cecs().bit() {
-                return Err(ErrorKind::ClockError);
-            }
-            if status.secs().bit() {
-                return Err(ErrorKind::SeedError);
-            }
-            if status.drdy().bit() {
-                return Ok(self.rb.dr().read().rndata().bits());
-            }
-        }
+        nb::block!(self.nb_value())
     }
-    
+
     /// Returns 32 bits of randomness, or error
     pub fn nb_value(&mut self) -> nb::Result<u32, ErrorKind> {
-        loop {
-            let status = self.rb.sr().read();
-            if status.cecs().bit() {
-                return Err(ErrorKind::ClockError);
-            }
-            if status.secs().bit() {
-                return Err(ErrorKind::SeedError);
-            }
-            if status.drdy().bit() {
-                return Ok(self.rb.dr().read().rndata().bits());
-            }
-            else {
-                return Err(nb::Error::WouldBlock);
-            }
+        let status = self.rb.sr().read();
+        if status.cecs().bit() {
+            Err(nb::Error::Other(ErrorKind::ClockError))
+        } else if status.secs().bit() {
+            Err(nb::Error::Other(ErrorKind::SeedError))
+        } else if status.drdy().bit() {
+            Ok(self.rb.dr().read().rndata().bits())
+        } else {
+            Err(nb::Error::WouldBlock)
         }
     }
 
@@ -271,4 +387,3 @@ impl rand_core::RngCore for Rng {
         })
     }
 }
-

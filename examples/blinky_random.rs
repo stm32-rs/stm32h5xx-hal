@@ -9,11 +9,7 @@
 
 use cortex_m_rt::entry;
 use embedded_hal::delay::DelayNs;
-use stm32h5xx_hal::{
-    delay::Delay,
-    pac,
-    prelude::*,
-};
+use stm32h5xx_hal::{delay::Delay, pac, prelude::*};
 #[macro_use]
 mod utilities;
 
@@ -49,7 +45,7 @@ fn main() -> ! {
     let mut delay = Delay::new(cp.SYST, &ccdr.clocks);
 
     // Get true random number generator
-    let mut rng = dp.RNG.constrain(ccdr.peripheral.RNG, &ccdr.clocks);
+    let mut rng = dp.RNG.rng(ccdr.peripheral.RNG, &ccdr.clocks);
     let mut random_bytes = [0u16; 3];
     match rng.fill(&mut random_bytes) {
         Ok(()) => info!("random bytes: {:?}", random_bytes),
