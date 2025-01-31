@@ -59,6 +59,7 @@ mod dynamic;
 mod erased;
 mod exti;
 mod gpio_def;
+mod hal;
 mod partially_erased;
 
 use core::{fmt, marker::PhantomData};
