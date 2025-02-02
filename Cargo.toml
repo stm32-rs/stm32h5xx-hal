@@ -56,6 +56,12 @@ log-itm = ["log"]
 log-rtt = ["log"]
 log-semihost = ["log"]
 
+defmt = [
+    "dep:defmt",
+    "fugit/defmt",
+    "stm32h5/defmt",
+]
+
 [dependencies]
 cortex-m = { version = "^0.7.7", features = ["critical-section-single-core"] }
 stm32h5 = { package = "stm32h5", version = "0.16.0" }
