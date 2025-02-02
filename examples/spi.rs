@@ -6,7 +6,7 @@ use cortex_m_rt::entry;
 mod utilities;
 use embedded_hal::delay::DelayNs;
 use embedded_hal::spi::SpiBus;
-use stm32h5xx_hal::{delay::Delay, pac, prelude::*, spi, time::Seconds};
+use stm32h5xx_hal::{delay::Delay, pac, prelude::*, spi, time::MilliSeconds};
 
 use log::info;
 
@@ -58,7 +58,7 @@ fn main() -> ! {
 
     info!("Transfer starting");
     let mut delay = Delay::new(cp.SYST, &ccdr.clocks);
-    let duration = Seconds::secs(1).to_millis();
+    let duration = MilliSeconds::secs(1).to_millis();
     // Echo what is received on the SPI
     let write = TEST_STR;
     let read = &mut [0u8; TEST_STR.len()];
