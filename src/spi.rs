@@ -824,26 +824,26 @@ pub enum Event {
 }
 
 #[derive(Debug)]
-pub struct Inner<SPI, W: FrameSize> {
+pub struct Inner<SPI, W: FrameSize<SPI>> {
     spi: SPI,
     _word: PhantomData<W>,
 }
 
 /// Spi in Master mode
 #[derive(Debug)]
-pub struct Spi<SPI, W: FrameSize = u8> {
+pub struct Spi<SPI, W: FrameSize<SPI> = u8> {
     inner: Inner<SPI, W>,
     _word: PhantomData<W>,
 }
 
-impl<SPI, W: FrameSize> Deref for Spi<SPI, W> {
+impl<SPI, W: FrameSize<SPI>> Deref for Spi<SPI, W> {
     type Target = Inner<SPI, W>;
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
-impl<SPI, W: FrameSize> DerefMut for Spi<SPI, W> {
+impl<SPI, W: FrameSize<SPI>> DerefMut for Spi<SPI, W> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
@@ -903,24 +903,37 @@ instance! { SPI1: Spi1, SPI123 }
 instance! { SPI2: Spi2, SPI123 }
 instance! { SPI3: Spi3, SPI123 }
 
-pub trait FrameSize: Copy + Default + 'static + crate::Sealed {
+pub trait FrameSize<SPI>: Copy + Default + 'static + crate::Sealed {
     const BITS: u8;
 }
 
 macro_rules! framesize {
     ($type:ty) => {
-        impl FrameSize for $type {
+        impl<SPI> FrameSize<SPI> for $type {
             const BITS: u8 = <$type>::BITS as u8;
         }
         impl crate::Sealed for $type {}
     };
 }
 
-framesize!(u32);
+macro_rules! framesize_u32 {
+    ($SPIx:ty) => {
+        impl FrameSize<$SPIx> for u32 {
+            const BITS: u8 = u32::BITS as u8;
+        }
+    };
+}
+impl crate::Sealed for u32 {}
+
 framesize!(u16);
 framesize!(u8);
 
-pub trait SpiExt<SPI: Instance, W: FrameSize = u8> {
+// Only SPI[1,2,3] support 32bit data size
+framesize_u32!(SPI1);
+framesize_u32!(SPI2);
+framesize_u32!(SPI3);
+
+pub trait SpiExt<SPI: Instance, W: FrameSize<SPI> = u8> {
     fn spi<PINS, CONFIG>(
         self,
         _pins: PINS,
@@ -944,7 +957,7 @@ pub trait SpiExt<SPI: Instance, W: FrameSize = u8> {
         CONFIG: Into<Config>;
 }
 
-impl<SPI: Instance, W: FrameSize> SpiExt<SPI, W> for SPI {
+impl<SPI: Instance, W: FrameSize<SPI>> SpiExt<SPI, W> for SPI {
     fn spi<PINS, CONFIG>(
         self,
         _pins: PINS,
@@ -993,7 +1006,7 @@ fn calc_mbr(spi_ker_ck: u32, spi_freq: u32) -> MBR {
     }
 }
 
-impl<SPI: Instance, W: FrameSize> Spi<SPI, W> {
+impl<SPI: Instance, W: FrameSize<SPI>> Spi<SPI, W> {
     fn new(
         spi: SPI,
         config: impl Into<Config>,
@@ -1114,7 +1127,7 @@ macro_rules! check_status_error {
     };
 }
 
-impl<SPI: Instance, W: FrameSize> Inner<SPI, W> {
+impl<SPI: Instance, W: FrameSize<SPI>> Inner<SPI, W> {
     fn new(spi: SPI) -> Self {
         Self {
             spi,
@@ -1387,7 +1400,7 @@ impl<SPI: Instance, W: FrameSize> Inner<SPI, W> {
     }
 }
 
-impl<SPI: Instance, W: FrameSize> Spi<SPI, W> {
+impl<SPI: Instance, W: FrameSize<SPI>> Spi<SPI, W> {
     /// Sets up a frame transaction with the given amount of data words.
     ///
     /// If this is called when a transaction has already started,
@@ -1441,7 +1454,7 @@ impl<SPI: Instance, W: FrameSize> Spi<SPI, W> {
 }
 
 #[derive(Debug)]
-pub struct NonBlockingTransfer<'a, W: FrameSize> {
+pub struct NonBlockingTransfer<'a, W> {
     write: &'a [W],
     read: &'a mut [W],
     write_idx: usize,
@@ -1449,7 +1462,7 @@ pub struct NonBlockingTransfer<'a, W: FrameSize> {
     len: usize,
 }
 
-impl<'a, W: FrameSize> NonBlockingTransfer<'a, W> {
+impl<'a, W> NonBlockingTransfer<'a, W> {
     pub fn new(write: &'a [W], read: &'a mut [W]) -> Self {
         let len = core::cmp::max(read.len(), write.len());
         NonBlockingTransfer {
@@ -1469,10 +1482,14 @@ impl<'a, W: FrameSize> NonBlockingTransfer<'a, W> {
         self.read_idx >= self.read.len() && self.write_idx >= self.write.len()
     }
 
-    fn write_to_spi_nb<SPI: Instance>(
+    fn write_to_spi_nb<SPI>(
         &mut self,
         spi: &mut Inner<SPI, W>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    where
+        SPI: Instance,
+        W: FrameSize<SPI>,
+    {
         if self.write_idx < self.write.len() {
             self.write_idx += spi.write_nb(&self.write[self.write_idx..])?;
         }
@@ -1484,10 +1501,14 @@ impl<'a, W: FrameSize> NonBlockingTransfer<'a, W> {
         Ok(())
     }
 
-    fn read_from_spi_nb<SPI: Instance>(
+    fn read_from_spi_nb<SPI>(
         &mut self,
         spi: &mut Inner<SPI, W>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    where
+        SPI: Instance,
+        W: FrameSize<SPI>,
+    {
         if self.read_idx < self.read.len() {
             self.read_idx += spi.read_nb(&mut self.read[self.read_idx..])?;
         }
@@ -1499,10 +1520,14 @@ impl<'a, W: FrameSize> NonBlockingTransfer<'a, W> {
         Ok(())
     }
 
-    fn exchange_nb<SPI: Instance>(
+    fn exchange_nb<SPI>(
         &mut self,
         spi: &mut Inner<SPI, W>,
-    ) -> nb::Result<(), Error> {
+    ) -> nb::Result<(), Error>
+    where
+        SPI: Instance,
+        W: FrameSize<SPI>,
+    {
         self.write_to_spi_nb(spi)?;
         self.read_from_spi_nb(spi)?;
         if self.is_complete() {
@@ -1514,7 +1539,7 @@ impl<'a, W: FrameSize> NonBlockingTransfer<'a, W> {
 }
 
 // Non-blocking operations
-impl<SPI: Instance, W: FrameSize> Spi<SPI, W> {
+impl<SPI: Instance, W: FrameSize<SPI>> Spi<SPI, W> {
     /// Ends the current transaction. This must always be called when all data has been sent to
     /// properly terminate the transaction and reset the SPI peripheral. Returns
     /// nb::Error::WouldBlock while a transfer is in progress (according to SR:TXC)
@@ -1560,7 +1585,7 @@ impl<SPI: Instance, W: FrameSize> Spi<SPI, W> {
 }
 
 // Implement blocking transaction interface for Spi
-impl<SPI: Instance, W: FrameSize> Spi<SPI, W> {
+impl<SPI: Instance, W: FrameSize<SPI>> Spi<SPI, W> {
     /// Write-only transfer
     fn write(&mut self, words: &[W]) -> Result<(), Error> {
         let communication_mode = self.communication_mode();
