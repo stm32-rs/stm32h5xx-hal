@@ -38,7 +38,11 @@ fn main() -> ! {
     let usb_dm = gpioa.pa11.into_alternate();
     let usb_dp = gpioa.pa12.into_alternate();
 
-    let usb = dp.USB.usb(ccdr.peripheral.USB, usb_dm, usb_dp);
+    let usb = dp.USB.usb(
+        ccdr.peripheral.USB, /*.kernel_clk_mux(USBSEL::Pll2Q)*/
+        usb_dm,
+        usb_dp,
+    );
     let usb_bus = UsbBus::new(usb);
 
     let mut serial = SerialPort::new(&usb_bus);
@@ -52,6 +56,8 @@ fn main() -> ! {
             .unwrap()
             .device_class(USB_CLASS_CDC)
             .build();
+
+    defmt::println!("Init done");
 
     loop {
         if !usb_dev.poll(&mut [&mut serial]) {
