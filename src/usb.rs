@@ -2,8 +2,8 @@
 //!
 //! Provides the required implementation for use of the [`stm32-usbd`] crate.
 
+use crate::stm32::rcc::ccipr4::USBSEL;
 pub use stm32_usbd::UsbBus;
-use stm32h5::stm32h523::rcc::ccipr4::USBSEL;
 
 use crate::gpio;
 use crate::gpio::gpioa::{PA11, PA12};
@@ -48,9 +48,7 @@ pub struct Peripheral {
 }
 
 #[cfg(feature = "defmt")]
-impl<Dm: DmPin + defmt::Format, Dp: DpPin + defmt::Format> defmt::Format
-    for Peripheral<Dm, Dp>
-{
+impl defmt::Format for Peripheral {
     fn format(&self, f: defmt::Formatter) {
         defmt::write!(
             f,
@@ -85,17 +83,24 @@ unsafe impl UsbPeripheral for Peripheral {
 
     fn enable() {
         cortex_m::interrupt::free(|_| {
-            let pwr = unsafe { &*stm32::PWR::ptr() };
             let rcc = unsafe { &*stm32::RCC::ptr() };
 
-            // Enable USB supply level detector
-            pwr.usbscr().modify(|_, w| w.usb33den().set_bit());
+            #[cfg(any(feature = "h523_h533", feature = "h56x_h573"))]
+            {
+                let pwr = unsafe { &*stm32::PWR::ptr() };
 
-            // Await good usb supply voltage
-            while pwr.vmsr().read().usb33rdy().bit_is_clear() {}
+                // Enable USB supply level detector
+                pwr.usbscr().modify(|_, w| w.usb33den().set_bit());
 
-            // Set bit to confirm that USB supply level is good
-            pwr.usbscr().modify(|_, w| w.usb33sv().set_bit());
+                defmt::println!("waiting good usb supply voltage");
+                // Await good usb supply voltage
+                while pwr.vmsr().read().usb33rdy().bit_is_clear() {}
+
+                // Set bit to confirm that USB supply level is good
+                pwr.usbscr().modify(|_, w| w.usb33sv().set_bit());
+            }
+
+            defmt::println!("Enabling");
 
             // Enable USB peripheral
             rcc.apb2enr().modify(|_, w| w.usben().set_bit());
