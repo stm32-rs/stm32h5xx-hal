@@ -22,11 +22,11 @@ impl HalError for Error {
     }
 }
 
-impl<SPI, W: FrameSize> ErrorType for Spi<SPI, W> {
+impl<SPI, W: FrameSize<SPI>> ErrorType for Spi<SPI, W> {
     type Error = Error;
 }
 
-impl<SPI: Instance, W: FrameSize> FullDuplex<W> for Spi<SPI, W> {
+impl<SPI: Instance, W: FrameSize<SPI>> FullDuplex<W> for Spi<SPI, W> {
     fn read(&mut self) -> nb::Result<W, Error> {
         self.check_read()
     }
@@ -36,7 +36,7 @@ impl<SPI: Instance, W: FrameSize> FullDuplex<W> for Spi<SPI, W> {
     }
 }
 
-impl<SPI: Instance, W: FrameSize> SpiBus<W> for Spi<SPI, W> {
+impl<SPI: Instance, W: FrameSize<SPI>> SpiBus<W> for Spi<SPI, W> {
     #[inline]
     fn read(&mut self, words: &mut [W]) -> Result<(), Self::Error> {
         self.read(words)
@@ -75,7 +75,7 @@ trait OperationExt {
     fn len(&self) -> usize;
 }
 
-impl<W: FrameSize> OperationExt for Operation<'_, W> {
+impl<W> OperationExt for Operation<'_, W> {
     fn len(&self) -> usize {
         match self {
             Operation::Read(words) => words.len(),
@@ -89,7 +89,7 @@ impl<W: FrameSize> OperationExt for Operation<'_, W> {
     }
 }
 
-impl<SPI: Instance, W: FrameSize> SpiDevice<W> for Spi<SPI, W> {
+impl<SPI: Instance, W: FrameSize<SPI>> SpiDevice<W> for Spi<SPI, W> {
     fn transaction(
         &mut self,
         operations: &mut [Operation<'_, W>],
