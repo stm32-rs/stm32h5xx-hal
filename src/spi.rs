@@ -198,7 +198,12 @@ use crate::rcc::{rec, CoreClocks, ResetEnable};
 use crate::stm32;
 use crate::stm32::rcc::ccipr3;
 use crate::stm32::spi1;
+#[cfg(any(feature = "h523_h533", feature = "h56x_h573"))]
+use crate::stm32::SPI4;
 use crate::stm32::{SPI1, SPI2, SPI3};
+#[cfg(feature = "h56x_h573")]
+use crate::stm32::{SPI5, SPI6};
+
 use crate::time::Hertz;
 use spi1::{cfg1::MBR, cfg2::COMM, cfg2::LSBFRST, cfg2::SSIOP};
 
@@ -611,6 +616,198 @@ pins! {
             gpio::PA0<Alternate<10>>,
             gpio::PD2<Alternate<6>>
         ]
+}
+
+// Note: pin data is taken from stm32h56x, stm32h573, stm32h523 and stm32h533 datasheets
+#[cfg(any(feature = "h523_h533", feature = "h56x_h573"))]
+pins! {
+    SPI1:
+        SCK: [
+            NoSck,
+            gpio::PA5<Alternate<5>>,
+            gpio::PB3<Alternate<5>>,
+            gpio::PG11<Alternate<5>>
+        ]
+        MISO: [
+            NoMiso,
+            gpio::PA6<Alternate<5>>,
+            gpio::PB4<Alternate<5>>,
+            gpio::PG9<Alternate<5>>
+        ]
+        MOSI: [
+            NoMosi,
+            gpio::PA7<Alternate<5>>,
+            gpio::PB5<Alternate<5>>,
+            #[cfg(feature = "h523_h533")]
+            gpio::PB15<Alternate<6>>,
+            gpio::PD7<Alternate<5>>
+        ]
+        HCS: [
+            gpio::PA4<Alternate<5>>,
+            gpio::PA15<Alternate<5>>,
+            gpio::PG10<Alternate<5>>
+        ]
+    SPI2:
+        SCK: [
+            NoSck,
+            gpio::PA9<Alternate<5>>,
+            gpio::PA12<Alternate<5>>,
+            gpio::PB10<Alternate<5>>,
+            gpio::PB13<Alternate<5>>,
+            gpio::PD3<Alternate<5>>,
+            #[cfg(feature = "h56x_h573")]
+            gpio::PI1<Alternate<5>>
+        ]
+        MISO: [
+            NoMiso,
+            gpio::PB14<Alternate<5>>,
+            gpio::PC2<Alternate<5>>,
+            #[cfg(feature = "h56x_h573")]
+            gpio::PI2<Alternate<5>>
+        ]
+        MOSI: [
+            NoMosi,
+            gpio::PB15<Alternate<5>>,
+            gpio::PC1<Alternate<5>>,
+            gpio::PC3<Alternate<5>>,
+            gpio::PG1<Alternate<7>>,
+            #[cfg(feature = "h56x_h573")]
+            gpio::PI3<Alternate<5>>
+        ]
+        HCS: [
+            gpio::PA3<Alternate<5>>,
+            gpio::PA11<Alternate<5>>,
+            #[cfg(feature = "h523_h533")]
+            gpio::PB1<Alternate<5>>,
+            gpio::PB4<Alternate<7>>,
+            gpio::PB9<Alternate<5>>,
+            gpio::PB12<Alternate<5>>,
+            #[cfg(feature = "h56x_h573")]
+            gpio::PI0<Alternate<5>>
+        ]
+    SPI3:
+        SCK: [
+            NoSck,
+            #[cfg(feature = "h523_h533")]
+            gpio::PB1<Alternate<4>>,
+            gpio::PB3<Alternate<6>>,
+            #[cfg(feature = "h523_h533")]
+            gpio::PB9<Alternate<6>>,
+            gpio::PC10<Alternate<6>>
+        ]
+        MISO: [
+            NoMiso,
+            #[cfg(feature = "h523_h533")]
+            gpio::PB0<Alternate<5>>,
+            gpio::PB4<Alternate<6>>,
+            gpio::PC11<Alternate<6>>,
+            #[cfg(feature = "h523_h533")]
+            gpio::PD7<Alternate<6>>
+        ]
+        MOSI: [
+            NoMosi,
+            #[cfg(feature = "h523_h533")]
+            gpio::PA3<Alternate<6>>,
+            #[cfg(feature = "h523_h533")]
+            gpio::PA4<Alternate<4>>,
+            gpio::PB2<Alternate<7>>,
+            gpio::PB5<Alternate<7>>,
+            gpio::PC12<Alternate<6>>,
+            gpio::PD6<Alternate<5>>,
+            #[cfg(feature = "h523_h533")]
+            gpio::PG8<Alternate<5>>
+        ]
+        HCS: [
+            gpio::PA4<Alternate<6>>,
+            gpio::PA15<Alternate<6>>,
+            #[cfg(feature = "h523_h533")]
+            gpio::PB8<Alternate<6>>
+        ]
+    SPI4:
+        SCK: [
+            NoSck,
+            #[cfg(feature = "h523_h533")]
+            gpio::PA0<Alternate<5>>,
+            #[cfg(feature = "h523_h533")]
+            gpio::PC5<Alternate<6>>,
+            gpio::PE2<Alternate<5>>,
+            gpio::PE12<Alternate<5>>
+        ]
+        MISO: [
+            NoMiso,
+            #[cfg(feature = "h523_h533")]
+            gpio::PC0<Alternate<6>>,
+            #[cfg(feature = "h523_h533")]
+            gpio::PB7<Alternate<5>>,
+            gpio::PE5<Alternate<5>>,
+            gpio::PE13<Alternate<5>>
+        ]
+        MOSI: [
+            NoMosi,
+            #[cfg(feature = "h523_h533")]
+            gpio::PA8<Alternate<6>>,
+            #[cfg(feature = "stm32h523")]
+            gpio::PC1<Alternate<6>>,
+            gpio::PE6<Alternate<5>>,
+            gpio::PE14<Alternate<5>>
+        ]
+        HCS: [
+            gpio::PE4<Alternate<5>>,
+            gpio::PE11<Alternate<5>>
+        ]
+
+}
+
+#[cfg(feature = "h56x_h573")]
+pins! {
+    SPI5:
+    SCK: [
+        NoSck,
+        gpio::PF7<Alternate<5>>,
+        gpio::PH6<Alternate<5>>,
+    ]
+    MISO: [
+        NoMiso,
+        gpio::PF8<Alternate<5>>,
+        gpio::PH7<Alternate<5>>,
+    ]
+    MOSI: [
+        NoMosi,
+        gpio::PF9<Alternate<5>>,
+        gpio::PF11<Alternate<5>>,
+        gpio::PH8<Alternate<5>>
+    ]
+    HCS: [
+        gpio::PF6<Alternate<5>>,
+        gpio::PH5<Alternate<5>>,
+        gpio::PH9<Alternate<5>>
+    ]
+SPI6:
+    SCK: [
+        NoSck,
+        gpio::PA5<Alternate<8>>,
+        gpio::PB3<Alternate<8>>,
+        gpio::PC12<Alternate<5>>,
+        gpio::PG13<Alternate<5>>
+    ]
+    MISO: [
+        NoMiso,
+        gpio::PA6<Alternate<8>>,
+        gpio::PB4<Alternate<8>>,
+        gpio::PG12<Alternate<5>>
+    ]
+    MOSI: [
+        NoMosi,
+        gpio::PA7<Alternate<8>>,
+        gpio::PB5<Alternate<8>>,
+        gpio::PG14<Alternate<5>>
+    ]
+    HCS: [
+        gpio::PA0<Alternate<5>>,
+        gpio::PA4<Alternate<8>>,
+        gpio::PA15<Alternate<7>>,
+        gpio::PG8<Alternate<5>>
+    ]
 }
 
 /// Interrupt events
