@@ -141,6 +141,7 @@ pub use embedded_hal::spi::{
     Mode, Phase, Polarity, MODE_0, MODE_1, MODE_2, MODE_3,
 };
 
+use crate::gpdma::Error as DmaError;
 use crate::rcc::{CoreClocks, ResetEnable};
 use crate::stm32::spi1;
 
@@ -148,6 +149,7 @@ use crate::time::Hertz;
 use spi1::{cfg1::MBR, cfg2::LSBFRST, cfg2::SSIOP};
 
 mod config;
+pub mod dma;
 mod hal;
 pub mod nonblocking;
 mod spi_def;
@@ -182,6 +184,14 @@ pub enum Error {
     /// Caller makes invalid call (e.g. write in SimplexReceiver mode, or read in
     /// SimplexTransmitter)
     InvalidOperation,
+    /// A DMA error occurred during processing
+    DmaError(DmaError)
+}
+
+impl From<DmaError> for Error {
+    fn from(error: DmaError) -> Self {
+        Error::DmaError(error)
+    }
 }
 
 pub trait Pins<SPI> {
@@ -252,6 +262,12 @@ pub trait Instance:
 
     #[doc(hidden)]
     fn rec() -> Self::Rec;
+
+    #[doc(hidden)]
+    fn tx_dma_request() -> u8;
+
+    #[doc(hidden)]
+    fn rx_dma_request() -> u8;
 }
 
 pub trait Word: Copy + Default + 'static + crate::Sealed {
@@ -562,6 +578,29 @@ impl<SPI: Instance, W: Word> Inner<SPI, W> {
         self.spi.ifcr().write(|w| w.modfc().clear());
         let _ = self.spi.sr().read();
         let _ = self.spi.sr().read();
+    }
+
+    /// Disable DMA for both Rx and Tx
+    #[inline]
+    pub fn enable_tx_dma(&self) {
+        self.spi.cfg1().modify(|_, w| w.txdmaen().disabled());
+    }
+
+    /// Disable DMA for both Rx and Tx
+    #[inline]
+    pub fn enable_rx_dma(&self) {
+        self.spi.cfg1().modify(|_, w| w.rxdmaen().disabled());
+    }
+
+    /// Disable DMA for both Rx and Tx
+    #[inline]
+    pub fn disable_dma(&self) {
+        self.spi.cfg1().modify(|_, w| w.rxdmaen().disabled().txdmaen().disabled());
+    }
+
+    #[inline]
+    pub fn start_transfer(&self) {
+        self.spi.cr1().modify(|_, w| w.cstart().started());
     }
 
     /// Read a single word from the receive data register
