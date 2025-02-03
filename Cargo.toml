@@ -66,6 +66,7 @@ defmt = [
 cortex-m = { version = "^0.7.7", features = ["critical-section-single-core"] }
 stm32h5 = { package = "stm32h5", version = "0.16.0" }
 fugit = "0.3.7"
+embedded-dma = "0.2"
 embedded-hal = "1.0.0"
 defmt = { version = "1.0.0", optional = true }
 paste = "1.0.15"
