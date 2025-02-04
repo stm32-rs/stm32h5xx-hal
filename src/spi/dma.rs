@@ -84,6 +84,22 @@ where
             self.spi.start_transfer();
         })
     }
+
+    pub fn is_dma_complete(&self) -> Result<bool, Error> {
+        let complete = self.transfer.is_transfer_complete()?
+            && self.transfer.is_transfer_complete()?;
+        Ok(complete)
+    }
+
+    pub fn end_transfer(&mut self) {
+        self.spi.end_transaction();
+        self.spi.disable_dma();
+    }
+
+    pub fn free(self) -> Result<(CH, D), Error> {
+        let (ch, _, d) = self.transfer.free()?;
+        Ok((ch, d))
+    }
 }
 
 pub struct TxDmaTransfer<'a, SPI, W: FrameSize, CH, S> {
@@ -116,6 +132,22 @@ where
             self.spi.enable();
             self.spi.start_transfer();
         })
+    }
+
+    pub fn is_dma_complete(&self) -> Result<bool, Error> {
+        let complete = self.transfer.is_transfer_complete()?
+            && self.transfer.is_transfer_complete()?;
+        Ok(complete)
+    }
+
+    pub fn end_transfer(&mut self) {
+        self.spi.end_transaction();
+        self.spi.disable_dma();
+    }
+
+    pub fn free(self) -> Result<(CH, S), Error> {
+        let (ch, s, _) = self.transfer.free()?;
+        Ok((ch, s))
     }
 }
 
