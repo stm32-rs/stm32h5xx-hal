@@ -182,7 +182,8 @@ where
     }
 
     pub fn wait_for_complete(&mut self) -> Result<(), Error> {
-        while !self.is_dma_complete()? {}
+        self.tx_transfer.wait_for_transfer_complete()?;
+        self.rx_transfer.wait_for_transfer_complete()?;
         self.spi.end_transaction();
         self.spi.disable_dma();
         Ok(())

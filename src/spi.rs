@@ -503,7 +503,12 @@ impl<SPI: Instance, W: Word> Inner<SPI, W> {
         self.spi.cr1().modify(|_, w| w.spe().enabled());
     }
 
-    /// Enable SPI
+    #[inline]
+    pub fn start_transfer(&self) {
+        self.spi.cr1().modify(|_, w| w.cstart().started());
+    }
+
+    /// Disable SPI
     fn disable(&mut self) {
         self.spi.cr1().modify(|_, w| w.spe().disabled());
     }
@@ -583,24 +588,19 @@ impl<SPI: Instance, W: Word> Inner<SPI, W> {
     /// Disable DMA for both Rx and Tx
     #[inline]
     pub fn enable_tx_dma(&self) {
-        self.spi.cfg1().modify(|_, w| w.txdmaen().disabled());
+        self.spi.cfg1().modify(|_, w| w.txdmaen().enabled());
     }
 
     /// Disable DMA for both Rx and Tx
     #[inline]
     pub fn enable_rx_dma(&self) {
-        self.spi.cfg1().modify(|_, w| w.rxdmaen().disabled());
+        self.spi.cfg1().modify(|_, w| w.rxdmaen().enabled());
     }
 
     /// Disable DMA for both Rx and Tx
     #[inline]
     pub fn disable_dma(&self) {
         self.spi.cfg1().modify(|_, w| w.rxdmaen().disabled().txdmaen().disabled());
-    }
-
-    #[inline]
-    pub fn start_transfer(&self) {
-        self.spi.cr1().modify(|_, w| w.cstart().started());
     }
 
     /// Read a single word from the receive data register
