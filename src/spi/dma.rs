@@ -213,7 +213,7 @@ impl<SPI: Instance, W: FrameSize + Word> Spi<SPI, W> {
     ) -> Result<DuplexInplaceDmaTransfer<SPI, W, TX, RX>, Error> {
         // Note (unsafe): Data will be read from the start of the buffer before data is written
         // to those locations just like for blocking non-DMA in-place transfers
-        let source = unsafe { *(buffer.as_ptr() as *const &[W]) };
+        let source = unsafe { core::slice::from_raw_parts(buffer.as_ptr(), buffer.len()) };
         let mut transfer = DuplexDmaTransfer::new(
             self, tx_channel, rx_channel, source, buffer,
         );
