@@ -53,19 +53,19 @@ unsafe impl<SPI: Instance, W: FrameSize> WriteBuffer for DmaTx<SPI, W> {
     }
 }
 
-pub struct RxDmaTransfer<SPI, W: FrameSize, CH, D> {
-    spi: Spi<SPI, W>,
+pub struct RxDmaTransfer<'a, SPI, W: FrameSize, CH, D> {
+    spi: &'a mut Spi<SPI, W>,
     transfer: DmaTransfer<CH, DmaRx<SPI, W>, D, PeripheralToMemory>,
 }
 
-impl<SPI, W, CH, D> RxDmaTransfer<SPI, W, CH, D>
+impl<'a, SPI, W, CH, D> RxDmaTransfer<'a, SPI, W, CH, D>
 where
     SPI: Instance,
     W: FrameSize + Word,
     CH: Channel,
     D: WriteBuffer<Word = W>,
 {
-    pub fn new(spi: Spi<SPI, W>, channel: CH, destination: D) -> Self {
+    pub fn new(spi: &'a mut Spi<SPI, W>, channel: CH, destination: D) -> Self {
         let config = DmaConfig::new().with_request(SPI::rx_dma_request());
         let source = DmaRx::new();
         let transfer = DmaTransfer::peripheral_to_memory(
@@ -86,19 +86,19 @@ where
     }
 }
 
-pub struct TxDmaTransfer<SPI, W: FrameSize, CH, S> {
-    spi: Spi<SPI, W>,
+pub struct TxDmaTransfer<'a, SPI, W: FrameSize, CH, S> {
+    spi: &'a mut Spi<SPI, W>,
     transfer: DmaTransfer<CH, S, DmaTx<SPI, W>, MemoryToPeripheral>,
 }
 
-impl<SPI, W, CH, S> TxDmaTransfer<SPI, W, CH, S>
+impl<'a, SPI, W, CH, S> TxDmaTransfer<'a, SPI, W, CH, S>
 where
     SPI: Instance,
     W: FrameSize + Word,
     CH: Channel,
     S: ReadBuffer<Word = W>,
 {
-    pub fn new(spi: Spi<SPI, W>, channel: CH, source: S) -> Self {
+    pub fn new(spi: &'a mut Spi<SPI, W>, channel: CH, source: S) -> Self {
         let config = DmaConfig::new().with_request(SPI::tx_dma_request());
         let destination = DmaTx::new();
         let transfer = DmaTransfer::memory_to_peripheral(
@@ -205,7 +205,13 @@ type DuplexInplaceDmaTransfer<'a, SPI, W, TX, RX> =
     DuplexDmaTransfer<'a, SPI, W, TX, RX, &'static [W], &'static mut [W]>;
 
 impl<SPI: Instance, W: FrameSize + Word> Spi<SPI, W> {
-    pub fn dma_transfer_inplace<TX: Channel, RX: Channel>(
+    pub fn write_dma<TX: Channel>(&mut self, channel: TX, data: &'static [W]) -> Result<TxDmaTransfer<SPI, W, TX, &'static [W]>, Error> {
+        let mut transfer = TxDmaTransfer::new(self, channel, data);
+        transfer.start()?;
+        Ok(transfer)
+    }
+
+    pub fn transfer_inplace_dma<TX: Channel, RX: Channel>(
         &mut self,
         buffer: &'static mut [W],
         tx_channel: TX,
