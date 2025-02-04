@@ -1,3 +1,7 @@
+//! This example shows off the using the SPI with the DMA engine
+//!
+//! For more docs, see https://docs.rs/stm32h7xx-hal/latest/stm32h5xx_hal/spi/index.html
+//!
 #![deny(warnings)]
 #![no_main]
 #![no_std]
@@ -11,7 +15,7 @@ use cortex_m_semihosting::debug;
 use stm32h5xx_hal::{
     pac,
     prelude::*,
-    spi::{self, Config as SpiConfig, Spi, dma::DuplexDmaTransfer},
+    spi::{self, dma::DuplexDmaTransfer, Config as SpiConfig},
 };
 
 static mut SOURCE_BYTES: MaybeUninit<[u8; 40]> = MaybeUninit::uninit();
@@ -45,13 +49,12 @@ fn main() -> ! {
 
     let dp = pac::Peripherals::take().unwrap();
 
-    // Constrain and Freeze power
-    log::info!("Setup PWR...                  ");
+    // Select highest power mode for max possible clock frequency
     let pwr = dp.PWR.constrain();
-    let pwrcfg = pwr.freeze();
+    let pwrcfg = pwr.vos0().freeze();
 
-    // Constrain and Freeze clock
-    log::info!("Setup RCC...                  ");
+    // Configure system PLLs and clocks - choose a PLL1 output so 1MHz SPI clock can be exactly
+    // derived from it
     let rcc = dp.RCC.constrain();
     let ccdr = rcc
         .sys_ck(192.MHz())
@@ -62,6 +65,8 @@ fn main() -> ! {
     // GPIOB in the RCC register.
     let gpiob = dp.GPIOB.split(ccdr.peripheral.GPIOB);
 
+    // This example requires that MISO is connected to MOSI via a jumper (pins 28 and 26 on CN10
+    // header on NUCLEO-H503RB)
     let sck = gpiob.pb13.into_alternate();
     let miso = gpiob.pb14.into_alternate();
     let mosi = gpiob.pb15.into_alternate();
@@ -69,7 +74,7 @@ fn main() -> ! {
     log::info!("stm32h5xx-hal example - SPI DMA");
 
     // Initialise the SPI peripheral.
-    let mut spi: Spi<_, u8> = dp.SPI2.spi(
+    let mut spi = dp.SPI2.spi(
         (sck, miso, mosi),
         SpiConfig::new(spi::MODE_0),
         1.MHz(),
@@ -83,7 +88,8 @@ fn main() -> ! {
     let tx_ch = channels.0;
     let rx_ch = channels.1;
 
-    let mut transfer = DuplexDmaTransfer::new(&mut spi, tx_ch, rx_ch, source_buf, dest_buf);
+    let mut transfer =
+        DuplexDmaTransfer::new(&mut spi, tx_ch, rx_ch, source_buf, dest_buf);
     transfer.start().unwrap();
     transfer.wait_for_complete().unwrap();
     let (_, _, source_buf, dest_buf) = transfer.free().unwrap();
