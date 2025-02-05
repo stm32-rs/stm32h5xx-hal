@@ -233,11 +233,15 @@ where
     }
 }
 
-type DuplexInplaceDmaTransfer<'a, SPI, W, TX, RX> =
+pub type DuplexInplaceDmaTransfer<'a, SPI, W, TX, RX> =
     DuplexDmaTransfer<'a, SPI, W, TX, RX, &'static [W], &'static mut [W]>;
 
 impl<SPI: Instance, W: FrameSize + Word> Spi<SPI, W> {
-    pub fn write_dma<TX: Channel>(&mut self, channel: TX, data: &'static [W]) -> Result<TxDmaTransfer<SPI, W, TX, &'static [W]>, Error> {
+    pub fn write_dma<TX: Channel>(
+        &mut self,
+        channel: TX,
+        data: &'static [W],
+    ) -> Result<TxDmaTransfer<SPI, W, TX, &'static [W]>, Error> {
         let mut transfer = TxDmaTransfer::new(self, channel, data);
         transfer.start()?;
         Ok(transfer)
@@ -251,7 +255,9 @@ impl<SPI: Instance, W: FrameSize + Word> Spi<SPI, W> {
     ) -> Result<DuplexInplaceDmaTransfer<SPI, W, TX, RX>, Error> {
         // Note (unsafe): Data will be read from the start of the buffer before data is written
         // to those locations just like for blocking non-DMA in-place transfers
-        let source = unsafe { core::slice::from_raw_parts(buffer.as_ptr(), buffer.len()) };
+        let source = unsafe {
+            core::slice::from_raw_parts(buffer.as_ptr(), buffer.len())
+        };
         let mut transfer = DuplexDmaTransfer::new(
             self, tx_channel, rx_channel, source, buffer,
         );
