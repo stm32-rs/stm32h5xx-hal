@@ -1,4 +1,4 @@
-use core::marker::PhantomData;
+use core::{cell::RefCell, marker::PhantomData, ops::{Deref, DerefMut}};
 
 use embedded_dma::{ReadBuffer, WriteBuffer};
 
@@ -151,13 +151,14 @@ where
     }
 }
 
-pub struct DuplexDmaTransfer<'a, SPI, W: FrameSize, TX, RX, S, D> {
-    spi: &'a mut Spi<SPI, W>,
+pub struct DuplexDmaTransfer<SPI: 'static, W: FrameSize + 'static, TX, RX, S, D>
+{
+    spi: &'static mut Spi<SPI, W>,
     tx_transfer: DmaTransfer<TX, S, DmaTx<SPI, W>, MemoryToPeripheral>,
     rx_transfer: DmaTransfer<RX, DmaRx<SPI, W>, D, PeripheralToMemory>,
 }
 
-impl<'a, SPI, W, RX, TX, S, D> DuplexDmaTransfer<'a, SPI, W, TX, RX, S, D>
+impl<SPI, W, RX, TX, S, D> DuplexDmaTransfer<SPI, W, TX, RX, S, D>
 where
     SPI: Instance,
     W: FrameSize + Word,
@@ -167,7 +168,7 @@ where
     D: WriteBuffer<Word = W>,
 {
     pub fn new(
-        spi: &'a mut Spi<SPI, W>,
+        spi: &'static mut Spi<SPI, W>,
         tx_channel: TX,
         rx_channel: RX,
         source: S,
@@ -196,14 +197,22 @@ where
         }
     }
 
+    pub fn enable_dma_interrupts(&self) {
+        self.rx_transfer.enable_interrupts()
+    }
+
+    pub fn disable_dma_interrupts(&self) {
+        self.rx_transfer.disable_interrupts()
+    }
+
     pub fn start(&mut self) -> Result<(), Error> {
         self.spi.enable_rx_dma();
+
         self.rx_transfer.start()?;
-        self.tx_transfer.start_with(|_, _| {
-            self.spi.enable_tx_dma();
-            self.spi.enable();
-            self.spi.start_transfer();
-        })?;
+        self.tx_transfer.start_nb();
+        self.spi.enable_tx_dma();
+        self.spi.enable();
+        self.spi.start_transfer();
         Ok(())
     }
 
@@ -230,38 +239,5 @@ where
         let (tx, s, _) = self.tx_transfer.free()?;
         let (rx, _, d) = self.rx_transfer.free()?;
         Ok((tx, rx, s, d))
-    }
-}
-
-pub type DuplexInplaceDmaTransfer<'a, SPI, W, TX, RX> =
-    DuplexDmaTransfer<'a, SPI, W, TX, RX, &'static [W], &'static mut [W]>;
-
-impl<SPI: Instance, W: FrameSize + Word> Spi<SPI, W> {
-    pub fn write_dma<TX: Channel>(
-        &mut self,
-        channel: TX,
-        data: &'static [W],
-    ) -> Result<TxDmaTransfer<SPI, W, TX, &'static [W]>, Error> {
-        let mut transfer = TxDmaTransfer::new(self, channel, data);
-        transfer.start()?;
-        Ok(transfer)
-    }
-
-    pub fn transfer_inplace_dma<TX: Channel, RX: Channel>(
-        &mut self,
-        buffer: &'static mut [W],
-        tx_channel: TX,
-        rx_channel: RX,
-    ) -> Result<DuplexInplaceDmaTransfer<SPI, W, TX, RX>, Error> {
-        // Note (unsafe): Data will be read from the start of the buffer before data is written
-        // to those locations just like for blocking non-DMA in-place transfers
-        let source = unsafe {
-            core::slice::from_raw_parts(buffer.as_ptr(), buffer.len())
-        };
-        let mut transfer = DuplexDmaTransfer::new(
-            self, tx_channel, rx_channel, source, buffer,
-        );
-        transfer.start()?;
-        Ok(transfer)
     }
 }
