@@ -761,53 +761,53 @@ pins! {
 #[cfg(feature = "h56x_h573")]
 pins! {
     SPI5:
-    SCK: [
-        NoSck,
-        gpio::PF7<Alternate<5>>,
-        gpio::PH6<Alternate<5>>,
-    ]
-    MISO: [
-        NoMiso,
-        gpio::PF8<Alternate<5>>,
-        gpio::PH7<Alternate<5>>,
-    ]
-    MOSI: [
-        NoMosi,
-        gpio::PF9<Alternate<5>>,
-        gpio::PF11<Alternate<5>>,
-        gpio::PH8<Alternate<5>>
-    ]
-    HCS: [
-        gpio::PF6<Alternate<5>>,
-        gpio::PH5<Alternate<5>>,
-        gpio::PH9<Alternate<5>>
-    ]
-SPI6:
-    SCK: [
-        NoSck,
-        gpio::PA5<Alternate<8>>,
-        gpio::PB3<Alternate<8>>,
-        gpio::PC12<Alternate<5>>,
-        gpio::PG13<Alternate<5>>
-    ]
-    MISO: [
-        NoMiso,
-        gpio::PA6<Alternate<8>>,
-        gpio::PB4<Alternate<8>>,
-        gpio::PG12<Alternate<5>>
-    ]
-    MOSI: [
-        NoMosi,
-        gpio::PA7<Alternate<8>>,
-        gpio::PB5<Alternate<8>>,
-        gpio::PG14<Alternate<5>>
-    ]
-    HCS: [
-        gpio::PA0<Alternate<5>>,
-        gpio::PA4<Alternate<8>>,
-        gpio::PA15<Alternate<7>>,
-        gpio::PG8<Alternate<5>>
-    ]
+        SCK: [
+            NoSck,
+            gpio::PF7<Alternate<5>>,
+            gpio::PH6<Alternate<5>>
+        ]
+        MISO: [
+            NoMiso,
+            gpio::PF8<Alternate<5>>,
+            gpio::PH7<Alternate<5>>
+        ]
+        MOSI: [
+            NoMosi,
+            gpio::PF9<Alternate<5>>,
+            gpio::PF11<Alternate<5>>,
+            gpio::PH8<Alternate<5>>
+        ]
+        HCS: [
+            gpio::PF6<Alternate<5>>,
+            gpio::PH5<Alternate<5>>,
+            gpio::PH9<Alternate<5>>
+        ]
+    SPI6:
+        SCK: [
+            NoSck,
+            gpio::PA5<Alternate<8>>,
+            gpio::PB3<Alternate<8>>,
+            gpio::PC12<Alternate<5>>,
+            gpio::PG13<Alternate<5>>
+        ]
+        MISO: [
+            NoMiso,
+            gpio::PA6<Alternate<8>>,
+            gpio::PB4<Alternate<8>>,
+            gpio::PG12<Alternate<5>>
+        ]
+        MOSI: [
+            NoMosi,
+            gpio::PA7<Alternate<8>>,
+            gpio::PB5<Alternate<8>>,
+            gpio::PG14<Alternate<5>>
+        ]
+        HCS: [
+            gpio::PA0<Alternate<5>>,
+            gpio::PA4<Alternate<8>>,
+            gpio::PA15<Alternate<7>>,
+            gpio::PG8<Alternate<5>>
+        ]
 }
 
 /// Interrupt events
