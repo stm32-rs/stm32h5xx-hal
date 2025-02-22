@@ -11,7 +11,6 @@ impl i2c::Error for Error {
             Error::NotAcknowledge => {
                 i2c::ErrorKind::NoAcknowledge(i2c::NoAcknowledgeSource::Unknown)
             }
-            _ => i2c::ErrorKind::Other,
         }
     }
 }

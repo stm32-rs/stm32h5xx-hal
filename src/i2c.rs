@@ -90,7 +90,7 @@ enum Direction {
 
 /// Addressing mode
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub enum AddressMode {
+enum AddressMode {
     /// 7-bit addressing mode
     AddressMode7bit,
     /// 10-bit addressing mode
@@ -108,9 +108,6 @@ pub enum Error {
     Arbitration,
     /// NACK received
     NotAcknowledge,
-    /// Target operation only: indicates that a stop or repeat start was
-    /// received while reading
-    TransferStopped,
 }
 
 /// A trait to represent the SCL Pin of an I2C Port
@@ -485,10 +482,6 @@ impl<I2C: Instance> Inner<I2C> {
         if isr.rxne().is_not_empty() {
             *data = self.i2c.rxdr().read().rxdata().bits();
             Ok(true)
-        } else if isr.stopf().is_stop() || isr.addr().is_match() {
-            // This is only relevant to Target operation, when the controller stops the read
-            // operation with a Stop or Restart condition.
-            Err(Error::TransferStopped)
         } else {
             Ok(false)
         }
