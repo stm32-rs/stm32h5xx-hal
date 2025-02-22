@@ -1,4 +1,4 @@
-use core::{cell::RefCell, marker::PhantomData, ops::{Deref, DerefMut}};
+use core::{marker::PhantomData, num::NonZeroUsize};
 
 use embedded_dma::{ReadBuffer, WriteBuffer};
 
@@ -151,14 +151,14 @@ where
     }
 }
 
-pub struct DuplexDmaTransfer<SPI: 'static, W: FrameSize + 'static, TX, RX, S, D>
-{
-    spi: &'static mut Spi<SPI, W>,
+pub struct DuplexDmaTransfer<'a, SPI, W: FrameSize, TX, RX, S, D> {
+    spi: &'a mut Spi<SPI, W>,
     tx_transfer: DmaTransfer<TX, S, DmaTx<SPI, W>, MemoryToPeripheral>,
     rx_transfer: DmaTransfer<RX, DmaRx<SPI, W>, D, PeripheralToMemory>,
+    len: usize,
 }
 
-impl<SPI, W, RX, TX, S, D> DuplexDmaTransfer<SPI, W, TX, RX, S, D>
+impl<'a, SPI, W, RX, TX, S, D> DuplexDmaTransfer<'a, SPI, W, TX, RX, S, D>
 where
     SPI: Instance,
     W: FrameSize + Word,
@@ -168,12 +168,14 @@ where
     D: WriteBuffer<Word = W>,
 {
     pub fn new(
-        spi: &'static mut Spi<SPI, W>,
+        spi: &'a mut Spi<SPI, W>,
         tx_channel: TX,
         rx_channel: RX,
         source: S,
-        destination: D,
+        mut destination: D,
     ) -> Self {
+        let (_, dest_len) = unsafe { destination.write_buffer() };
+
         let tx_config = DmaConfig::new().with_request(SPI::tx_dma_request());
         let tx_destination = DmaTx::new();
         let tx_transfer = DmaTransfer::memory_to_peripheral(
@@ -194,6 +196,7 @@ where
             spi,
             tx_transfer,
             rx_transfer,
+            len: dest_len,
         }
     }
 
@@ -207,12 +210,11 @@ where
 
     pub fn start(&mut self) -> Result<(), Error> {
         self.spi.enable_rx_dma();
-
-        self.rx_transfer.start()?;
+        self.rx_transfer.start_nb();
         self.tx_transfer.start_nb();
         self.spi.enable_tx_dma();
-        self.spi.enable();
-        self.spi.start_transfer();
+        self.spi
+            .setup_transaction(NonZeroUsize::new(self.len).unwrap())?;
         Ok(())
     }
 
@@ -235,7 +237,15 @@ where
         self.spi.disable_dma();
     }
 
-    pub fn free(self) -> Result<(TX, RX, S, D), Error> {
+    pub fn abort(&mut self) -> Result<(), Error> {
+        self.end_transfer();
+        self.tx_transfer.abort()?;
+        self.rx_transfer.abort()?;
+        Ok(())
+    }
+
+    pub fn free(mut self) -> Result<(TX, RX, S, D), Error> {
+        self.end_transfer();
         let (tx, s, _) = self.tx_transfer.free()?;
         let (rx, _, d) = self.rx_transfer.free()?;
         Ok((tx, rx, s, d))
