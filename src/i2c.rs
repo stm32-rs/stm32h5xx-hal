@@ -494,7 +494,6 @@ impl<I2C: Instance> Inner<I2C> {
         }
     }
 
-
     /// Blocks until data is available and returns it
     ///
     /// If a bus error occurs it will be returned and a read will not be

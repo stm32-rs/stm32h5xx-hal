@@ -2,7 +2,7 @@ use core::marker::PhantomData;
 
 use crate::gpio::{self, Alternate, OpenDrain};
 use crate::rcc::{rec, CoreClocks};
-use crate::stm32::{self, i2c1, rcc::ccipr4, I2C1, I2C2};
+use crate::stm32::{self, i2c1, rcc::ccipr4};
 use crate::time::Hertz;
 
 use super::{Instance, PinScl, PinSda};
@@ -22,11 +22,11 @@ macro_rules! pins {
 
 // Implemented by all I2C instances
 macro_rules! i2c {
-    ($I2CX:ty: $I2cX:ident, $Pclk:ident, $pclk:ident) => {
+    ($I2CX:ty: $pclk:ident, $pllX:ident) => {
 
         paste::item! {
             impl Instance for $I2CX {
-                type Rec = rec::$I2cX;
+                type Rec = rec::[< $I2CX:lower:camel >];
 
                 fn ptr() -> *const i2c1::RegisterBlock {
                     <$I2CX>::ptr() as *const _
@@ -36,15 +36,15 @@ macro_rules! i2c {
                     let ccipr4 = unsafe { (*stm32::RCC::ptr()).ccipr4().read() };
 
                     match ccipr4.[<$I2CX:lower sel>]().variant() {
-                        ccipr4::I2CSEL::$Pclk => Some(clocks.$pclk()),
-                        ccipr4::I2CSEL::Pll2R => clocks.pll2_r_ck(),
+                        ccipr4::I2CSEL::Pclk => Some(clocks.$pclk()),
+                        ccipr4::I2CSEL::[< $pllX:camel R>] => clocks.[< $pllX:lower  _r_ck >](),
                         ccipr4::I2CSEL::HsiKer => clocks.hsi_ck(),
                         ccipr4::I2CSEL::CsiKer => clocks.csi_ck(),
                     }.expect("Source clock not enabled")
                 }
 
                 fn rec() -> Self::Rec {
-                    rec::$I2cX { _marker: PhantomData }
+                    rec::[< $I2CX:lower:camel >] { _marker: PhantomData }
                 }
             }
 
@@ -56,6 +56,7 @@ macro_rules! i2c {
 #[cfg(feature = "rm0492")]
 mod rm492 {
     use super::*;
+    use crate::stm32::{I2C1, I2C2};
 
     pins! {
         I2C1:
@@ -91,6 +92,6 @@ mod rm492 {
             ]
     }
 
-    i2c! { I2C1: I2c1, Pclk, pclk1 }
-    i2c! { I2C2: I2c2, Pclk, pclk1 }
+    i2c! { I2C1: pclk1, Pll2 }
+    i2c! { I2C2: pclk1, Pll2 }
 }
