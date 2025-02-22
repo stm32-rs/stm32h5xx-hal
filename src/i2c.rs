@@ -23,8 +23,6 @@
 //! - Clock (SCL)
 //! - Data (SDA)
 //!
-//! ### Blocking operations
-//!
 //! The driver exposes the controller functionality via the embedded-hal I2C
 //! traits:
 //!
@@ -45,47 +43,6 @@
 //! i2c.write_read(0x18, &write, &mut read)?;
 //! ```
 //!
-//! ### Non-blocking operation
-//!
-//! The module also exposes non-blocking read/write functions for use with
-//! interrupt-driven or otherwise asynchronous approaches, as well as support
-//! functions to control Start/Stop/Nack operations.
-//!
-//! ```
-//! use nb::block;
-//!
-//! // Simple write
-//! let write = [0x11, 0x22, 0x33];
-//! i2c.start(0x18, AddressMode::AddressMode7bit, write.len(), Stop::Automatic)
-//!
-//! for byte in write {
-//!     block!(i2c.write_nb(byte))?;
-//! }
-//!
-//! block!(i2c.is_stopped_nb())?;
-//!
-//! /// Write, then read
-//! let mut buffer = [0u8; 4];
-//!
-//! i2c.start(0x18, AddressMode::AddressMode7bit, 1, Stop::RepeatStart);
-//! block!(i2c.write_nb(0x01))?;
-//! block!(i2c.is_transmit_complete_nb())?;
-//!
-//! i2c.repeat_start(0x18, AddressMode::AddressMode7bit, read.len(), Stop::Automatic)
-//!
-//! for byte in buffer {
-//!     *byte = block!(self.read_nb())?;
-//! }
-//!
-//! block!(i2c.is_stopped_nb())?;
-//! ```
-//!
-//! ## Interrupts
-//! Interrupts can be enabled/disabled with the listen/unlisten functions.
-//! Additionally, interrupts that must be cleared manually, can be done with
-//! the clear_irq method. The check_event method allows you to check whether
-//! a specific event occurred.
-//!
 //! # Examples
 //!
 //! - [I2C controller simple example](https://github.com/stm32-rs/stm32h5xx-hal/blob/master/examples/i2c.rs)
@@ -103,35 +60,11 @@ use crate::time::Hertz;
 mod hal;
 mod i2c_def;
 
-/// I2C Events
-///
-/// Each event is a possible interrupt source, if enabled
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum Event {
-    /// Peripheral is ready to write new data (TXIE, TXIS)
-    Transmit,
-    /// Peripheral has data available to read (RXIEXNE)
-    Receive,
-    /// The current transfer is complete (TCIE, TC)
-    TransferComplete,
-    /// The current transfer is complete and can be reloaded to read/write more
-    /// data (TCIE, TCR)
-    Reload,
-    /// A Stop condition was detected (STOPIE, STOPF)
-    Stop,
-    /// A bus error occurred (ERRIE, ARLOF, BERRF)
-    Error,
-    /// Not Acknowledge received (NACKIE, NACKF)
-    NotAcknowledge,
-    /// Address match (ADDRIE, ADDRF)
-    AddressMatch,
-}
-
 /// I2C Stop Configuration
 ///
 /// Peripheral options for generating the STOP condition
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub enum Stop {
+enum Stop {
     /// Repeat start mode: A repeat start condition will be generated at the
     /// end of the current operation when using the blocking API or when the
     /// repeat_start is called. Otherwise,this can be used to take manual
@@ -148,7 +81,7 @@ pub enum Stop {
 
 /// Direction of transfer
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub enum Direction {
+enum Direction {
     /// Read operation
     Read,
     /// Write operation
@@ -464,69 +397,15 @@ impl<I2C: Instance> I2c<I2C> {
         self.i2c.cr1().modify(|_, w| w.pe().enabled());
     }
 
-    /// Start listening for interrupt `event`
-    pub fn listen(&mut self, event: Event) {
-        self.i2c.cr1().modify(|_, w| match event {
-            Event::Transmit => w.txie().enabled(),
-            Event::Receive => w.rxie().enabled(),
-            Event::Reload => w.tcie().enabled(),
-            Event::TransferComplete => w.tcie().enabled(),
-            Event::Stop => w.stopie().enabled(),
-            Event::Error => w.errie().enabled(),
-            Event::NotAcknowledge => w.nackie().enabled(),
-            Event::AddressMatch => w.addrie().enabled(),
-        });
-    }
-
-    /// Stop listening for interrupt `event`
-    pub fn unlisten(&mut self, event: Event) {
-        self.i2c.cr1().modify(|_, w| match event {
-            Event::Transmit => w.txie().disabled(),
-            Event::Receive => w.rxie().disabled(),
-            Event::TransferComplete => w.tcie().disabled(),
-            Event::Reload => w.tcie().disabled(),
-            Event::Stop => w.stopie().disabled(),
-            Event::Error => w.errie().disabled(),
-            Event::NotAcknowledge => w.nackie().disabled(),
-            Event::AddressMatch => w.addrie().disabled(),
-        });
-        interrupt_clear_clock_sync_delay!(self.i2c.cr1());
-    }
-
-    /// Clears interrupt flag for `event`
-    pub fn clear_irq(&mut self, event: Event) {
-        self.i2c.icr().write(|w| match event {
-            Event::Stop => w.stopcf().clear(),
-            Event::AddressMatch => w.addrcf().clear(),
-            Event::Error => w.berrcf().clear().arlocf().clear().ovrcf().clear(),
-            Event::NotAcknowledge => w.nackcf().clear(),
-            _ => w,
-        });
-        interrupt_clear_clock_sync_delay!(self.i2c.cr1());
-    }
-
-    /// Check if the specified `event`` occurred. If an error occurred, this
-    /// will return an error Result. Otherwise, the return value will indicate
-    /// whether the event occurred via the wrapped boolean.
-    pub fn check_event(&mut self, event: Event) -> Result<bool, Error> {
-        let isr = self.read_isr_and_check_errors()?;
-
-        let result = match event {
-            Event::Transmit => isr.txis().is_empty(),
-            Event::Receive => isr.rxne().is_not_empty(),
-            Event::TransferComplete => isr.tc().is_complete(),
-            Event::Reload => isr.tcr().is_complete(),
-            Event::Stop => isr.stopf().is_stop(),
-            Event::NotAcknowledge => isr.nackf().is_nack(),
-            Event::AddressMatch => isr.addr().is_match(),
-            Event::Error => false,
-        };
-        Ok(result)
+    pub fn free(mut self) -> I2C {
+        self.reset();
+        self.inner.i2c
     }
 }
 
 impl<I2C: Instance> Inner<I2C> {
-    fn flush_txdr(&mut self) {
+    #[inline(always)]
+    fn flush_txdr(&self) {
         // If a pending TXIS flag is set, write dummy data to TXDR
         if self.i2c.isr().read().txis().bit_is_set() {
             self.i2c.txdr().write(|w| w.txdata().set(0));
@@ -538,7 +417,8 @@ impl<I2C: Instance> Inner<I2C> {
         }
     }
 
-    fn read_isr_and_check_errors(&mut self) -> Result<Isr, Error> {
+    #[inline(always)]
+    fn read_isr_and_check_errors(&self) -> Result<Isr, Error> {
         let isr = self.i2c.isr().read();
         if isr.berr().is_error() {
             self.i2c.icr().write(|w| w.berrcf().clear());
@@ -550,7 +430,8 @@ impl<I2C: Instance> Inner<I2C> {
         Ok(isr)
     }
 
-    fn check_clear_target_nack(&mut self, isr: &Isr) -> Result<(), Error> {
+    #[inline(always)]
+    fn check_clear_target_nack(&self, isr: &Isr) -> Result<(), Error> {
         if isr.nackf().is_nack() {
             self.i2c.icr().write(|w| w.nackcf().clear());
             self.flush_txdr();
@@ -559,53 +440,70 @@ impl<I2C: Instance> Inner<I2C> {
             Ok(())
         }
     }
-}
 
-/// Shared non-blocking operations
-impl<I2C: Instance> Inner<I2C> {
-    /// Write a single byte if possible. Returns an nb::Result
-    /// for use with the nb::block! macro.
+    /// Write a single byte if possible. If data was written, Ok(true) is
+    /// returned. If the peripheral is not yet ready, but no error occurred,
+    /// Ok(false) is returned.
     ///
     /// If a bus error occurs it will be returned and a write will not be
     /// attempted. If a previous byte was Nack'd by the receiver, that is
     /// indicated by a NotAcknowledge error being returned.
-    ///
-    /// Otherwise, this writes the data, or nb::Error::WouldBlock if not yet
-    /// possible.
-    pub fn write_nb(&mut self, data: u8) -> nb::Result<(), Error> {
+    #[inline(always)]
+    fn write_byte_if_ready(&self, data: u8) -> Result<bool, Error> {
         let isr = self.read_isr_and_check_errors()?;
         self.check_clear_target_nack(&isr)?;
 
         if isr.txis().is_empty() {
             self.i2c.txdr().write(|w| w.txdata().set(data));
-            Ok(())
+            Ok(true)
         } else {
-            Err(nb::Error::WouldBlock)
+            Ok(false)
         }
     }
 
-    /// Read a single byte if one is available. Returns an nb::Result
-    /// for use with the nb::block! macro.
+    /// Blocks until data can be written and writes it.
+    ///
+    /// If a bus error occurs it will be returned and a write will not be
+    /// attempted. If a previous byte was Nack'd by the receiver, that is
+    /// indicated by a NotAcknowledge error being returned.
+    fn write_byte(&mut self, data: u8) -> Result<(), Error> {
+        while !self.write_byte_if_ready(data)? {}
+        Ok(())
+    }
+
+    /// Read a single byte if one is available. If data was read, Ok(true) is
+    /// returned and the value read is stored to `data`. If the peripheral is
+    /// not yet ready, but no error occurred, Ok(false) is returned.
     ///
     /// If a bus error occurs it will be returned and a read will not be
     /// attempted. In Target mode, if the operation is stopped by the
     /// Controller, a TransferStopped error is returned.
-    ///
-    /// Otherwise, this returns the data read, or nb::Error::WouldBlock if none
-    /// is available.
-    pub fn read_nb(&mut self) -> nb::Result<u8, Error> {
+    #[inline(always)]
+    fn read_byte_if_ready(&self, data: &mut u8) -> Result<bool, Error> {
         let isr = self.read_isr_and_check_errors()?;
 
         if isr.rxne().is_not_empty() {
-            let data = self.i2c.rxdr().read().rxdata().bits();
-            Ok(data)
+            *data = self.i2c.rxdr().read().rxdata().bits();
+            Ok(true)
         } else if isr.stopf().is_stop() || isr.addr().is_match() {
             // This is only relevant to Target operation, when the controller stops the read
             // operation with a Stop or Restart condition.
-            Err(nb::Error::Other(Error::TransferStopped))
+            Err(Error::TransferStopped)
         } else {
-            Err(nb::Error::WouldBlock)
+            Ok(false)
         }
+    }
+
+
+    /// Blocks until data is available and returns it
+    ///
+    /// If a bus error occurs it will be returned and a read will not be
+    /// attempted. In Target mode, if the operation is stopped by the
+    /// Controller, a TransferStopped error is returned.
+    fn read_byte(&mut self) -> Result<u8, Error> {
+        let mut data = 0u8;
+        while !self.read_byte_if_ready(&mut data)? {}
+        Ok(data)
     }
 }
 
@@ -637,8 +535,8 @@ impl<I2C: Instance> I2c<I2C> {
     /// Controller: ST SAD+R  ...  (SP)
     /// Target:               ...
     /// ```
-    pub fn start(
-        &mut self,
+    fn start(
+        &self,
         addr: u16,
         address_mode: AddressMode,
         length: usize,
@@ -678,8 +576,8 @@ impl<I2C: Instance> I2c<I2C> {
     ///
     /// See the sequence diagrams in Figures 390 & 393 of RM0492 Rev 2 for more.
     ///
-    pub fn repeat_start(
-        &mut self,
+    fn repeat_start(
+        &self,
         addr: u16,
         address_mode: AddressMode,
         length: usize,
@@ -715,7 +613,7 @@ impl<I2C: Instance> I2c<I2C> {
     /// previous call of start/repeat_start
     ///
     /// See the sequence diagrams in Figures 390 & 393 of RM0492 Rev 2 for more.
-    pub fn reload(&mut self, length: usize, direction: Direction, stop: Stop) {
+    fn reload(&self, length: usize, direction: Direction, stop: Stop) {
         self.i2c.cr2().write(|w| {
             w.rd_wrn()
                 .bit(direction == Direction::Read)
@@ -727,90 +625,102 @@ impl<I2C: Instance> I2c<I2C> {
                 .bit(stop == Stop::Reload)
         });
     }
-
-    /// Stop
-    ///
-    /// Generate a stop condition. This can be used when a manual Stop is
-    ///
-    /// ```
-    /// Controller: ...  SP
-    /// Target:     ...
-    /// ```
-    pub fn stop(&mut self) {
-        self.i2c.cr2().write(|w| w.stop().set_bit());
-    }
 }
 
-/// Non blocking data transactions and status checks
 impl<I2C: Instance> I2c<I2C> {
     /// Check whether start sequence has completed.
-    /// This can be polled until it returns Ok
-    pub fn is_start_sequence_complete_nb(&mut self) -> nb::Result<(), Error> {
+    #[inline(always)]
+    fn is_start_sequence_complete(&self) -> Result<bool, Error> {
         let isr = self.read_isr_and_check_errors()?; // just check for errors
         self.check_clear_target_nack(&isr)?;
 
         if self.i2c.cr2().read().start().is_no_start() {
-            Ok(())
+            Ok(true)
         } else {
-            Err(nb::Error::WouldBlock)
+            Ok(false)
         }
     }
 
+    /// Blocks until start sequence has completed
+    fn wait_for_start_sequence_complete(&self) -> Result<(), Error> {
+        while !self.is_start_sequence_complete()? {}
+        Ok(())
+    }
+
     /// Check whether an operation has completed
-    /// This can be polled until it returns Ok
-    pub fn is_stopped_nb(&mut self) -> nb::Result<(), Error> {
+    #[inline(always)]
+    fn is_stopped(&self) -> Result<bool, Error> {
         let isr = self.read_isr_and_check_errors()?;
         self.check_clear_target_nack(&isr)?;
 
         if isr.stopf().is_stop() {
             self.i2c.icr().write(|w| w.stopcf().clear());
-            Ok(())
+            Ok(true)
         } else {
-            Err(nb::Error::WouldBlock)
+            Ok(false)
         }
     }
 
+    /// Blocks until the operation completes
+    fn wait_for_stop(&self) -> Result<(), Error> {
+        while !self.is_stopped()? {}
+        Ok(())
+    }
+
     /// Check whether peripheral is ready for reload
-    /// This can be polled until it returns Ok
-    pub fn is_reload_ready_nb(&mut self) -> nb::Result<(), Error> {
+    #[inline(always)]
+    fn is_reload_ready(&self) -> Result<bool, Error> {
         let isr = self.read_isr_and_check_errors()?;
         self.check_clear_target_nack(&isr)?;
         if isr.tcr().is_complete() {
-            Ok(())
+            Ok(true)
         } else {
-            Err(nb::Error::WouldBlock)
+            Ok(false)
         }
+    }
+
+    /// Blocks until the peripheral is ready for reload.
+    fn wait_for_reload_ready(&self) -> Result<(), Error> {
+        while !self.is_reload_ready()? {}
+        Ok(())
     }
 
     /// Check whether all bytes have been transmitted before issuing repeat
     /// start.
-    /// This can be polled until it returns Ok
-    pub fn is_transmit_complete_nb(&mut self) -> nb::Result<(), Error> {
+    #[inline(always)]
+    fn is_transmit_complete(&self) -> Result<bool, Error> {
         let isr = self.read_isr_and_check_errors()?;
         self.check_clear_target_nack(&isr)?;
 
         if isr.tc().is_complete() {
-            Ok(())
+            Ok(true)
         } else {
-            Err(nb::Error::WouldBlock)
+            Ok(false)
         }
     }
-}
 
-/// Internal blocking controller operations
-impl<I2C: Instance> I2c<I2C> {
+    /// Blocks until all bytes have been transmitted
+    fn wait_for_transmit_complete(&self) -> Result<(), Error> {
+        while !self.is_transmit_complete()? {}
+        Ok(())
+    }
+
+    /// Write the contents of the buffer. Blocks until all data has been
+    /// written, or an error occurs.
     fn write_all(&mut self, bytes: &[u8]) -> Result<(), Error> {
         for byte in bytes {
             // Blocks until we are allowed to send data (START has been ACKed or last byte when
             // through)
-            nb::block!(self.write_nb(*byte))?;
+            self.write_byte(*byte)?;
         }
         Ok(())
     }
 
+    /// Fill the buffer with data read from the bus. Blocks until all data
+    /// have been read or an error occurs.
     fn read_all(&mut self, buffer: &mut [u8]) -> Result<(), Error> {
         for byte in buffer {
-            *byte = nb::block!(self.read_nb())?;
+            *byte = self.read_byte()?;
         }
         Ok(())
     }

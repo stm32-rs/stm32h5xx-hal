@@ -47,7 +47,7 @@ impl<I2C: Instance> I2c<I2C> {
         stop: Stop,
         op: &mut i2c::Operation<'_>,
     ) -> Result<(), Error> {
-        nb::block!(self.is_start_sequence_complete_nb())?;
+        self.wait_for_start_sequence_complete()?;
 
         match op {
             i2c::Operation::Read(buffer) => self.read_all(buffer)?,
@@ -55,11 +55,9 @@ impl<I2C: Instance> I2c<I2C> {
         }
 
         match stop {
-            Stop::RepeatStart => {
-                nb::block!(self.is_transmit_complete_nb())
-            }
-            Stop::Reload => nb::block!(self.is_reload_ready_nb()),
-            Stop::Automatic => nb::block!(self.is_stopped_nb()),
+            Stop::RepeatStart => self.wait_for_transmit_complete(),
+            Stop::Reload => self.wait_for_reload_ready(),
+            Stop::Automatic => self.wait_for_stop(),
         }
     }
 
@@ -117,7 +115,7 @@ impl<I2C: Instance> I2c<I2C> {
             let result = self.process_operation(stop, &mut operations[i]);
 
             if let Err(error) = result {
-                nb::block!(self.is_stopped_nb())?;
+                self.wait_for_stop()?;
                 return Err(error);
             }
         }
