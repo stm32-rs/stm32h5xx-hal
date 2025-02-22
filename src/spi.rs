@@ -185,7 +185,7 @@ pub enum Error {
     /// SimplexTransmitter)
     InvalidOperation,
     /// A DMA error occurred during processing
-    DmaError(DmaError)
+    DmaError(DmaError),
 }
 
 impl From<DmaError> for Error {
@@ -508,6 +508,14 @@ impl<SPI: Instance, W: Word> Inner<SPI, W> {
         self.spi.cr1().modify(|_, w| w.cstart().started());
     }
 
+    fn set_transfer_word_count(&self, words: u16) {
+        self.spi.cr2().modify(|_, w| w.tsize().set(words));
+    }
+
+    fn reset_transfer_word_count(&self) {
+        self.spi.cr2().modify(|_, w| w.tsize().set(0));
+    }
+
     /// Disable SPI
     fn disable(&mut self) {
         self.spi.cr1().modify(|_, w| w.spe().disabled());
@@ -600,7 +608,9 @@ impl<SPI: Instance, W: Word> Inner<SPI, W> {
     /// Disable DMA for both Rx and Tx
     #[inline]
     pub fn disable_dma(&self) {
-        self.spi.cfg1().modify(|_, w| w.rxdmaen().disabled().txdmaen().disabled());
+        self.spi
+            .cfg1()
+            .modify(|_, w| w.rxdmaen().disabled().txdmaen().disabled());
     }
 
     /// Read a single word from the receive data register
@@ -838,7 +848,7 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
             u16::MAX
         );
 
-        self.spi().cr2().write(|w| w.tsize().set(length as u16));
+        self.set_transfer_word_count(length.get() as u16);
 
         // Re-enable
         self.inner.clear_modf();
@@ -872,6 +882,7 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
             .write(|w| w.txtfc().clear().eotc().clear().suspc().clear());
 
         self.inner.disable();
+        self.inner.reset_transfer_word_count();
         true
     }
 
@@ -885,6 +896,7 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
 
     fn abort_transaction(&mut self) {
         self.inner.disable();
+        self.inner.reset_transfer_word_count();
     }
 
     /// Deconstructs the SPI peripheral and returns the component parts.
