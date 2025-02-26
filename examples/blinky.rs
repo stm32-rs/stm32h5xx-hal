@@ -8,6 +8,7 @@ use cortex_m_rt::entry;
 use embedded_hal::delay::DelayNs;
 use fugit::SecsDurationU32;
 use stm32h5xx_hal::{delay::Delay, pac, prelude::*};
+use utilities::logger::info;
 
 #[entry]
 fn main() -> ! {
@@ -31,10 +32,10 @@ fn main() -> ! {
 
     loop {
         led.set_low();
-        log::info!("Off");
+        info!("Off");
         delay.delay_ms(duration);
         led.set_high();
-        log::info!("On");
+        info!("On");
         delay.delay_ms(duration);
     }
 }
