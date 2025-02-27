@@ -49,6 +49,10 @@ pub use crate::stm32::interrupt;
 pub mod prelude;
 
 #[cfg(feature = "device-selected")]
+#[macro_use]
+mod macros;
+
+#[cfg(feature = "device-selected")]
 pub mod pwr;
 
 #[cfg(feature = "device-selected")]
@@ -59,6 +63,9 @@ pub mod rcc;
 
 #[cfg(feature = "device-selected")]
 pub mod gpio;
+
+#[cfg(feature = "device-selected")]
+pub mod i2c;
 
 #[cfg(feature = "device-selected")]
 pub mod icache;
