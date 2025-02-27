@@ -7,5 +7,6 @@ pub use crate::icache::ICacheExt as _stm32h5xx_hal_icache_ICacheExt;
 pub use crate::pwr::PwrExt as _stm32h5xx_hal_pwr_PwrExt;
 pub use crate::rcc::RccExt as _stm32h5xx_hal_rcc_RccExt;
 
+pub use crate::rng::{RngCore as _, RngExt as _};
 pub use crate::time::U32Ext as _;
 pub use fugit::{ExtU32 as _, RateExtU32 as _};

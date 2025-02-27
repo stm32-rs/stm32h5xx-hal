@@ -42,6 +42,8 @@ ethernet = []               # Only STM32H563/73 have ethernet
 otfdec = []                 # Only STM32H573/33 have OTFDEC
 sdmmc2 = []                 # Only STM32H563/73 have SDMMC2
 
+rand = ["dep:rand_core"]
+
 rt = ["stm32h5/rt"]
 stm32h503 = ["stm32h5/stm32h503", "device-selected", "rm0492"]
 stm32h523 = ["stm32h5/stm32h523", "device-selected", "rm0481", "h523_h533"]
@@ -64,6 +66,8 @@ embedded-hal = "1.0.0"
 defmt = { version = "0.3.8", optional = true }
 paste = "1.0.15"
 log = { version = "0.4.20", optional = true}
+nb = "1.1.0"
+rand_core = { version = "0.6", default-features = false, optional = true }
 
 [dev-dependencies]
 log = { version = "0.4.20"}
