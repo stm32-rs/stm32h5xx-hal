@@ -8,10 +8,9 @@
 #![no_std]
 
 use cortex_m_rt::entry;
+use cortex_m_semihosting::debug;
 use embedded_hal::spi::{Operation, SpiDevice};
-use embedded_hal_nb::spi::FullDuplex;
 mod utilities;
-use core::num::NonZeroUsize;
 use spi::Spi;
 use stm32h5xx_hal::{
     pac,
@@ -20,8 +19,6 @@ use stm32h5xx_hal::{
 };
 
 use log::info;
-
-use nb::block;
 
 #[entry]
 fn main() -> ! {
@@ -79,30 +76,8 @@ fn main() -> ! {
         &ccdr.clocks,
     );
 
-    // We want to send a frame of three bytes.
-    // This means that the CS should be asserted, three words should be sent and the CS should be de-asserted.
-    // To do this, it takes a bit more management.
-
-    // // Prepare sending the frame
-    spi.setup_transaction(NonZeroUsize::new(3).unwrap())
-        .unwrap();
-
-    // // Write fixed data.
-    // // The CS will automatically be pulled low before the data is sent and de-assert after the sending is done.
-    for word in &[0x11u8, 0x22, 0x33] {
-        block!(FullDuplex::write(&mut spi, *word)).unwrap();
-    }
-
-    // The way that the silicon works, we also need to clean up some flags.
-    // If we don't, then the SPI will silently swallow any data you want to send.
-    // So in this example that would have meant that if we also called send with a fourth byte,
-    // that byte would've simply not been sent
-    spi.end_transaction();
-
-    // When in this mode, the blocking embedded-hal interface already does this for us.
-    // For example if we want to send two separate frames of different lengths, we can do this:
-    SpiDevice::write(&mut spi, &[0, 1, 2]).unwrap();
-    SpiDevice::write(&mut spi, &[0, 1, 2, 3, 4, 5, 6]).unwrap();
+    spi.write(&[0, 1, 2]).unwrap();
+    spi.write(&[0, 1, 2, 3, 4, 5, 6]).unwrap();
 
     // Compose multiple operations into a single compound transfer using Operations
     let mut ops = [
@@ -110,9 +85,9 @@ fn main() -> ! {
         Operation::Write(&[0x44u8, 0x55, 0x66]),
     ];
 
-    SpiDevice::transaction(&mut spi, &mut ops).unwrap();
+    spi.transaction(&mut ops).unwrap();
 
     loop {
-        cortex_m::asm::nop();
+        debug::exit(debug::EXIT_SUCCESS);
     }
 }

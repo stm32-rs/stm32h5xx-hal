@@ -4,8 +4,7 @@
 
 use cortex_m_rt::entry;
 mod utilities;
-use embedded_hal::delay::DelayNs;
-use embedded_hal::spi::SpiBus;
+use embedded_hal::{delay::DelayNs, spi::SpiBus};
 use stm32h5xx_hal::{delay::Delay, pac, prelude::*, spi, time::MilliSeconds};
 
 use log::info;

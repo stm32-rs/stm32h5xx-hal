@@ -1,11 +1,8 @@
-use core::num::NonZeroUsize;
-
 use embedded_hal::spi::{
     Error as HalError, ErrorKind, ErrorType, Operation, SpiBus, SpiDevice,
 };
-use embedded_hal_nb::spi::FullDuplex;
 
-use super::{Error, FrameSize, Instance, NonBlockingTransfer, Spi};
+use super::{Error, Instance, Spi, Word};
 
 impl HalError for Error {
     fn kind(&self) -> ErrorKind {
@@ -22,32 +19,19 @@ impl HalError for Error {
     }
 }
 
-impl<SPI, W: FrameSize<SPI>> ErrorType for Spi<SPI, W> {
+impl<SPI, W: Word> ErrorType for Spi<SPI, W> {
     type Error = Error;
 }
 
-impl<SPI: Instance, W: FrameSize<SPI>> FullDuplex<W> for Spi<SPI, W> {
-    fn read(&mut self) -> nb::Result<W, Error> {
-        self.check_read()
-    }
-
-    fn write(&mut self, word: W) -> nb::Result<(), Error> {
-        self.check_write(word)
-    }
-}
-
-impl<SPI: Instance, W: FrameSize<SPI>> SpiBus<W> for Spi<SPI, W> {
-    #[inline]
+impl<SPI: Instance, W: Word> SpiBus<W> for Spi<SPI, W> {
     fn read(&mut self, words: &mut [W]) -> Result<(), Self::Error> {
         self.read(words)
     }
 
-    #[inline]
     fn write(&mut self, words: &[W]) -> Result<(), Self::Error> {
         self.write(words)
     }
 
-    #[inline]
     fn transfer(
         &mut self,
         read: &mut [W],
@@ -56,7 +40,6 @@ impl<SPI: Instance, W: FrameSize<SPI>> SpiBus<W> for Spi<SPI, W> {
         self.transfer(read, write)
     }
 
-    #[inline]
     fn transfer_in_place(
         &mut self,
         words: &mut [W],
@@ -64,9 +47,8 @@ impl<SPI: Instance, W: FrameSize<SPI>> SpiBus<W> for Spi<SPI, W> {
         self.transfer_inplace(words)
     }
 
-    #[inline]
     fn flush(&mut self) -> Result<(), Self::Error> {
-        // todo!();
+        // This is handled within each of the above functions
         Ok(())
     }
 }
@@ -89,7 +71,29 @@ impl<W> OperationExt for Operation<'_, W> {
     }
 }
 
-impl<SPI: Instance, W: FrameSize<SPI>> SpiDevice<W> for Spi<SPI, W> {
+impl<SPI: Instance, W: Word> Spi<SPI, W> {
+    #[inline(always)]
+    fn perform_operation<'a>(
+        &mut self,
+        operation: &mut Operation<'a, W>,
+    ) -> Result<(), Error> {
+        match operation {
+            Operation::Read(words) => self.read_words(words),
+            Operation::Write(words) => self.write_words(words),
+            Operation::Transfer(read, write) => {
+                self.transfer_words(read, write)
+            }
+            Operation::TransferInPlace(words) => {
+                self.transfer_words_inplace(words)
+            }
+            Operation::DelayNs(_) => {
+                unimplemented!()
+            }
+        }
+    }
+}
+
+impl<SPI: Instance, W: Word> SpiDevice<W> for Spi<SPI, W> {
     fn transaction(
         &mut self,
         operations: &mut [Operation<'_, W>],
@@ -98,25 +102,14 @@ impl<SPI: Instance, W: FrameSize<SPI>> SpiDevice<W> for Spi<SPI, W> {
         if len == 0 {
             return Ok(());
         }
-        self.setup_transaction(NonZeroUsize::new(len).unwrap())?;
+        self.setup_transaction(len);
 
         for operation in operations {
-            match operation {
-                Operation::Read(words) => {
-                    self.read_words(words)?;
-                }
-                Operation::Write(words) => {
-                    self.write_words(words)?;
-                }
-                Operation::Transfer(read, write) => {
-                    let mut transfer = NonBlockingTransfer::new(write, read);
-                    nb::block!(transfer.exchange_nb(self))?;
-                }
-                Operation::TransferInPlace(words) => {
-                    self.transfer_words_inplace(words)?;
-                }
-                Operation::DelayNs(_) => {
-                    unimplemented!()
+            match self.perform_operation(operation) {
+                Ok(()) => {}
+                Err(error) => {
+                    self.abort_transaction();
+                    return Err(error);
                 }
             }
         }
