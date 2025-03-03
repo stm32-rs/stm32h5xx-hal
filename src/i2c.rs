@@ -1141,7 +1141,7 @@ impl<I2C: Instance, A, R> I2cTarget<I2C, A, R> {
         for (i, data) in bytes.iter().chain(iter::repeat(&0)).enumerate() {
             match self.write_byte(*data) {
                 Ok(()) => {}
-                Err(Error::NotAcknowledge) => return Ok(i),
+                Err(Error::NotAcknowledge) => return Ok(core::cmp::min(i, bytes.len())),
                 Err(error) => return Err(error),
             }
         }
@@ -1283,7 +1283,7 @@ impl<I2C: Instance, R> TargetAckMode for I2cTarget<I2C, ManualAck, R> {
             } else {
                 self.restart_transfer(buf.len())
             }
-            let count = if buf.len() < (u8::MAX as usize) {
+            let count = if bytes_written + buf.len() == bytes.len() {
                 // This is the last chunk so write out zeroes if we reach the end of the buffer
                 self.write_buf_fill_zeroes(buf)?
             } else {
