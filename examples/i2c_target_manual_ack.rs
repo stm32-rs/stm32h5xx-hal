@@ -58,8 +58,8 @@ fn main() -> ! {
     loop {
         let event = i2c.wait_for_event().unwrap();
         let result = match event {
-            TargetEvent::TargetWrite { address: _ } => i2c.write(b"Hello"),
-            TargetEvent::TargetRead { address: _ } => {
+            TargetEvent::Read { address: _ } => i2c.write(b"Hello"),
+            TargetEvent::Write { address: _ } => {
                 let result = i2c.read(&mut buf);
                 // An operation can be performed here while the clock is stretched low (ie.
                 // calculating or fetching data)

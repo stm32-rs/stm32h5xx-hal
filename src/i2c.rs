@@ -143,8 +143,9 @@
 //!
 //! - [I2C controller simple example](https://github.com/stm32-rs/stm32h5xx-hal/blob/master/examples/i2c.rs)
 //! - [I2C Target simple example](https://github.com/stm32-rs/stm32h5xx-hal/blob/master/examples/i2c_target.rs)
-//! - [I2C Target with manual ack control](https://github.com/stm32-rs/stm32h5xx-hal/blob/master/examples/i2c_target_manual_ack.rs)
+//! - [I2C Target with manual ACK control](https://github.com/stm32-rs/stm32h5xx-hal/blob/master/examples/i2c_target_manual_ack.rs)
 
+use core::iter;
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
 
@@ -225,19 +226,19 @@ pub enum Error {
 /// Target Event.
 ///
 /// This encapsulates a transaction event that occurs when listening in Target
-/// operation. A TargetWrite event indicates that the Controller wants to read
-/// data from the Target (I2C read operation). A TargetRead event indicates
-/// that the Controller wants to write data to the Target (I2C write
-/// operation). A Stop event indicates that a Stop condition was received and
-/// the transaction has been completed.
+/// operation. A Read event indicates that the Controller wants to read
+/// data from the Target and the target must write to the bus.
+/// A Write event indicates that the Controller wants to write data to the
+/// Target and the target must read data from the bus.
+/// A Stop event indicates that a Stop condition was received and the transaction has been completed.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TargetEvent {
     /// The controller initiated an I2C Read operation, requiring that the Target must write to the
     /// bus.
-    TargetWrite { address: u16 },
+    Read { address: u16 },
     /// The controller initiated an I2C Write operation, requiring that the Target must read from
     /// the bus.
-    TargetRead { address: u16 },
+    Write { address: u16 },
     /// A Stop condition was received, ending the transaction.
     Stop,
 }
@@ -249,8 +250,15 @@ pub enum TargetEvent {
 /// secondary address.
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum TargetListenEvent {
+    /// The General Call address (0x0) is reserved for specific broadcasts in the I2C
+    /// standard. Enabling the general call event will enable the target to receive
+    /// General Call broadcasts from the bus controller
     GeneralCall,
+    /// Primary address of the target. A single address specific to this target. Can
+    /// be 7- or 10-bit.
     PrimaryAddress,
+    /// The Secondary address event is a match against a 7-bit address range governed
+    /// by an associated mask. See the `Config` for more.
     SecondaryAddress,
 }
 
@@ -291,10 +299,16 @@ pub struct Inner<I2C> {
     i2c: I2C,
 }
 
+/// Marker struct for an I2c/I2cTarget that can switch between Controller and Target operation
 pub struct SwitchRole;
+
+/// Marker struct for an I2c/I2cTarget that cannot switch between Controller and Target operation
 pub struct SingleRole;
 
+/// Marker struct for I2cTarget implementation to indicate that it allows for manual ACK control
 pub struct ManualAck;
+
+/// Marker struct for I2cTarget implementation to indicate that it automatically handles all ACK'ing
 pub struct AutoAck;
 
 #[derive(Debug)]
@@ -762,7 +776,7 @@ impl<I2C: Instance> Inner<I2C> {
     /// Ok(false) is returned.
     ///
     /// If a bus error occurs it will be returned and a write will not be
-    /// attempted. If a previous byte was Nack'd by the receiver, that is
+    /// attempted. If a previous byte was NACK'd by the receiver, that is
     /// indicated by a NotAcknowledge error being returned.
     #[inline(always)]
     fn write_byte_if_ready(&self, data: u8) -> Result<bool, Error> {
@@ -780,7 +794,7 @@ impl<I2C: Instance> Inner<I2C> {
     /// Blocks until data can be written and writes it.
     ///
     /// If a bus error occurs it will be returned and a write will not be
-    /// attempted. If a previous byte was Nack'd by the receiver, that is
+    /// attempted. If a previous byte was NACK'd by the receiver, that is
     /// indicated by a NotAcknowledge error being returned.
     fn write_byte(&mut self, data: u8) -> Result<(), Error> {
         while !self.write_byte_if_ready(data)? {}
@@ -1080,8 +1094,8 @@ impl<I2C: Instance, R> I2c<I2C, R> {
 /// I2C Target common blocking operations
 impl<I2C: Instance, A, R> I2cTarget<I2C, A, R> {
     /// While operating with automatic ACK control, this will indicate to the
-    /// peripheral that the next byte received should be nack'd (the last
-    /// received was already ACK'd). The peripheral only nacks if a byte is
+    /// peripheral that the next byte received should be NACK'd (the last
+    /// received was already ACK'd). The peripheral only NACKs if a byte is
     /// received. If a control signal is received, the peripheral will respond
     /// correctly.
     ///
@@ -1105,26 +1119,43 @@ impl<I2C: Instance, A, R> I2cTarget<I2C, A, R> {
         Ok(buffer.len())
     }
 
-    fn write_all(&mut self, bytes: &[u8]) -> Result<usize, Error> {
+    fn write_buf(&mut self, bytes: &[u8]) -> Result<usize, Error> {
         assert!(!bytes.is_empty());
-        let mut i: usize = 0;
-        loop {
-            let data = if i < bytes.len() {
-                i += 1;
-                bytes[i - 1]
-            } else {
-                0
-            };
-            match self.write_byte(data) {
+
+        for (i, data) in bytes.iter().enumerate() {
+            match self.write_byte(*data) {
                 Ok(()) => {}
                 Err(Error::NotAcknowledge) => return Ok(i),
                 Err(error) => return Err(error),
             }
         }
+        Ok(bytes.len())
+    }
+
+    fn write_buf_fill_zeroes(&mut self, bytes: &[u8]) -> Result<usize, Error> {
+        assert!(!bytes.is_empty());
+
+        // The controller can try to read more data than the target has to write, so we write
+        // zeroes until the controller stops the transaction.
+        // This creates an iterator that will return zeroes when the buffer is exhausted.
+        for (i, data) in bytes.iter().chain(iter::repeat(&0)).enumerate() {
+            match self.write_byte(*data) {
+                Ok(()) => {}
+                Err(Error::NotAcknowledge) => return Ok(i),
+                Err(error) => return Err(error),
+            }
+        }
+        unreachable!();
     }
 }
 
-impl<I2C: Instance, R> I2cTarget<I2C, AutoAck, R> {
+trait TargetAckMode {
+    fn get_target_event(&mut self) -> Result<Option<TargetEvent>, Error>;
+    fn read(&mut self, buffer: &mut [u8]) -> Result<usize, Error>;
+    fn write(&mut self, bytes: &[u8]) -> Result<usize, Error>;
+}
+
+impl<I2C: Instance, R> TargetAckMode for I2cTarget<I2C, AutoAck, R> {
     fn get_target_event(&mut self) -> Result<Option<TargetEvent>, Error> {
         let isr = self.read_isr_and_check_errors()?;
 
@@ -1140,11 +1171,11 @@ impl<I2C: Instance, R> I2cTarget<I2C, AutoAck, R> {
             let address = isr.addcode().bits();
             if isr.dir().is_read() {
                 // TODO: Translate address into 10-bit stored address if relevant
-                Ok(Some(TargetEvent::TargetWrite {
+                Ok(Some(TargetEvent::Read {
                     address: address as u16,
                 }))
             } else {
-                Ok(Some(TargetEvent::TargetRead {
+                Ok(Some(TargetEvent::Write {
                     address: address as u16,
                 }))
             }
@@ -1156,165 +1187,21 @@ impl<I2C: Instance, R> I2cTarget<I2C, AutoAck, R> {
         }
     }
 
-    /// Block operation to wait for this device to be addressed or for a
-    /// transaction to be stopped. When the device is addressed, a
-    /// TargetEvent::Read or TargetEvent::Write event will be returned.
-    /// If the transaction was stopped, TargetEvent::Stop will be returned.
-    ///
-    /// If an error occurs while waiting for an event, this will be returned.
-    ///
-    /// Note: The TargetEvent type that is indicated is indicated from the
-    /// perspective of the Bus controller, so if a Read event is received,
-    /// then the Target should respond with a write, and vice versa.
-    pub fn wait_for_event(&mut self) -> Result<TargetEvent, Error> {
-        loop {
-            if let Some(event) = self.get_target_event()? {
-                return Ok(event);
-            }
-        }
-    }
-
-    /// Perform a blocking read. This will read until the buffer is full, at
-    /// which point the controller will be nack'd for any subsequent byte
-    /// received. If no error occurs, the function will return when the
-    /// operation is stopped (either via a Stop or Repeat Start event).
-    ///
-    /// The function will return the number of bytes received wrapped in the
-    /// Ok result, or an error if one occurred.
-    pub fn read(&mut self, buffer: &mut [u8]) -> Result<usize, Error> {
+    fn read(&mut self, buffer: &mut [u8]) -> Result<usize, Error> {
         let size = self.read_all(buffer)?;
 
-        // Nack any subsequent bytes
+        // NACK any subsequent bytes
         self.nack();
 
         Ok(size)
     }
 
-    /// Perform a blocking write to the bus. This will write the
-    /// contents of the buffer, followed by zeroes if the controller keeps
-    /// clocking the bus. If the controller nacks at any point the function
-    /// will return with an Ok result.
-    ///
-    /// The function will return the number of bytes written wrapped in the
-    /// Ok result, or an error if one occurred.
-    pub fn write(&mut self, bytes: &[u8]) -> Result<usize, Error> {
-        self.write_all(bytes)
-    }
-
-    /// Waits for a controller write event and reads the data written by the
-    /// controller to the buffer provided. This will read until the buffer is
-    /// full, at which point the controller will be nack'd for any subsequent
-    /// bytes received.
-    ///
-    /// If the controller read event or a stop condition is received, an error
-    /// will be returned.
-    ///
-    /// The function will return the number of bytes received wrapped in the
-    /// Ok result, or an error if one occurred.
-    ///
-    /// ### Note:
-    /// While only one of the configured primary or secondary addresses will
-    /// be matched against, this method may not be suitable for use when
-    /// different operations must be performed depending upon the received
-    /// address.
-    pub fn wait_for_target_read(
-        &mut self,
-        buffer: &mut [u8],
-    ) -> Result<usize, Error> {
-        match self.wait_for_event()? {
-            TargetEvent::TargetWrite { address: _ } => {
-                Err(Error::ControllerExpectedWrite)
-            }
-            TargetEvent::TargetRead { address: _ } => self.read(buffer),
-            TargetEvent::Stop => Err(Error::TransferStopped),
-        }
-    }
-
-    /// Waits for a controller read event and writes the contents of the
-    /// buffer, followed by zeroes if the controller keeps clocking the bus. If
-    /// the controller nacks at any point the write will be terminated and the
-    /// function will return with an Ok result indicating the number of bytes
-    /// written before the nack occurred.
-    ///
-    /// If the controller write event or a stop condition is received, an error
-    /// will be returned.
-    ///
-    /// The function will return the number of bytes written wrapped in the
-    /// Ok result, or an error if one occurred.
-    ///
-    /// ### Note:
-    /// While only one of the configured primary or secondary addresses will
-    /// be matched against, this method may not be suitable for use when
-    /// different operations must be performed depending upon the received
-    /// address.
-    pub fn wait_for_target_write(
-        &mut self,
-        bytes: &[u8],
-    ) -> Result<usize, Error> {
-        match self.wait_for_event()? {
-            TargetEvent::TargetWrite { address: _ } => self.write(bytes),
-            TargetEvent::TargetRead { address: _ } => {
-                Err(Error::ControllerExpectedRead)
-            }
-            TargetEvent::Stop => Err(Error::TransferStopped),
-        }
-    }
-
-    /// Waits for a transaction to be stopped
-    ///
-    /// If a controller write or read event is received, an error is returned,
-    /// otherwise an Ok result is returned when the stop condition is received.
-    pub fn wait_for_stop(&mut self) -> Result<(), Error> {
-        match self.wait_for_event()? {
-            TargetEvent::TargetWrite { address: _ } => {
-                Err(Error::ControllerExpectedWrite)
-            }
-            TargetEvent::TargetRead { address: _ } => {
-                Err(Error::ControllerExpectedRead)
-            }
-            TargetEvent::Stop => Ok(()),
-        }
+    fn write(&mut self, bytes: &[u8]) -> Result<usize, Error> {
+        self.write_buf_fill_zeroes(bytes)
     }
 }
 
-impl<I2C: Instance, R> I2cTarget<I2C, ManualAck, R> {
-    /// This will start a transfer operation in manual acking mode.
-    ///
-    /// When performing a read operation the caller must pass the number
-    /// of bytes that will be read before a manual ack will be performed. All
-    /// bytes prior to that will be ack'd automatically.
-    ///
-    /// When performing a write operation this determines how many TXIS events will be generated for
-    /// event handling (typically via interrupts).
-    fn start_transfer(&mut self, expected_bytes: usize) {
-        self.i2c
-            .cr2()
-            .modify(|_, w| w.nbytes().set(expected_bytes as u8));
-        self.i2c.icr().write(|w| w.addrcf().clear());
-    }
-
-    /// End a transfer in manual ack'ing mode. This should only be called after
-    /// the expected number of bytes have been read (as set up with
-    /// I2cTarget::start_transfer), otherwise the bus might hang.
-    fn end_transfer(&mut self) {
-        self.i2c.cr2().modify(|_, w| w.reload().completed());
-    }
-
-    /// Restart a transfer in manual acking mode.
-    ///
-    /// When performing a read operation, this allows partial reads of a transaction with manual
-    /// acking together with I2cTarget::start_transfer. To handle a single byte between each ack,
-    /// set expected_bytes to 1 before each read.
-    ///
-    /// When performing a write operation this determines how many TXIS events will be generated for
-    /// event handling (typically via interrupts)
-    fn restart_transfer(&mut self, expected_bytes: usize) {
-        self.i2c
-            .cr2()
-            .modify(|_, w| w.nbytes().set(expected_bytes as u8));
-    }
-
-    /// Manage checking for events in manual acking mode
+impl<I2C: Instance, R> TargetAckMode for I2cTarget<I2C, ManualAck, R> {
     fn get_target_event(&mut self) -> Result<Option<TargetEvent>, Error> {
         let isr = self.read_isr_and_check_errors()?;
 
@@ -1338,7 +1225,7 @@ impl<I2C: Instance, R> I2cTarget<I2C, ManualAck, R> {
             if isr.dir().is_read() {
                 self.i2c.icr().write(|w| w.addrcf().clear());
                 // TODO: Translate address into 10-bit stored address if relevant
-                Ok(Some(TargetEvent::TargetWrite {
+                Ok(Some(TargetEvent::Read {
                     address: address as u16,
                 }))
             } else {
@@ -1346,7 +1233,7 @@ impl<I2C: Instance, R> I2cTarget<I2C, ManualAck, R> {
                 // controller, so set it up here.
                 self.i2c.cr1().modify(|_, w| w.sbc().enabled());
                 self.i2c.cr2().modify(|_, w| w.reload().not_completed());
-                Ok(Some(TargetEvent::TargetRead {
+                Ok(Some(TargetEvent::Write {
                     address: address as u16,
                 }))
             }
@@ -1358,39 +1245,12 @@ impl<I2C: Instance, R> I2cTarget<I2C, ManualAck, R> {
         }
     }
 
-    /// Block operation to wait for this device to be addressed or for a
-    /// transaction to be stopped. When the device is addressed, a
-    /// TargetEvent::Read or TargetEvent::Write event will be returned.
-    /// If the transaction was stopped, TargetEvent::Stop will be returned.
-    ///
-    /// If an error occurs while waiting for an event, this will be returned.
-    ///
-    /// Note: The TargetEvent type that is indicated is indicated from the
-    /// perspective of the Bus controller, so if a Read event is received,
-    /// then the Target should respond with a write, and vice versa.
-    pub fn wait_for_event(&mut self) -> Result<TargetEvent, Error> {
-        loop {
-            if let Some(event) = self.get_target_event()? {
-                return Ok(event);
-            }
-        }
-    }
-
-    /// Perform a blocking read. If no error occurs, this will read until the
-    /// buffer is full, or until the transfer is stopped by the controller,
-    /// whichever comes first. If the buffer is filled before the controller
-    /// stops the transaction, the final byte will not be ack'd. The
-    /// I2cTarget::ack_transfer function must be called in this case in order
-    /// to complete the transaction.
-    ///
-    /// Note: this function should not be called to read less than the expected
-    /// number of bytes in the total transaction. This could potentially leave
-    /// the bus in a bad state.
-    ///
-    /// The function will return the number of bytes received wrapped in the
-    /// Ok result, or an error if one occurred.
-    pub fn read(&mut self, buffer: &mut [u8]) -> Result<usize, Error> {
+    fn read(&mut self, buffer: &mut [u8]) -> Result<usize, Error> {
         let mut bytes_read = 0;
+        // In manual ACK'ing mode we use Slave Byte Control (SBC) which requires using the NBYTES
+        // field to indicate how many bytes to ACK before a manual ACK is required. The NBYTES field
+        // is 8 bits wide, so if the transaction is larger than 255 bytes, we need to manually
+        // restart the transfer by setting NBYTES again.
         for (i, buf) in buffer.chunks_mut(u8::MAX as usize).enumerate() {
             if i == 0 {
                 self.start_transfer(buf.len());
@@ -1407,22 +1267,24 @@ impl<I2C: Instance, R> I2cTarget<I2C, ManualAck, R> {
         Ok(bytes_read)
     }
 
-    /// Perform a blocking write to the bus. This will write the
-    /// contents of the buffer, followed by zeroes if the controller keeps
-    /// clocking the bus. If the controller nacks at any point the function
-    /// will return with an Ok result.
-    ///
-    /// The function will return the number of bytes written wrapped in the
-    /// Ok result, or an error if one occurred.
-    pub fn write(&mut self, bytes: &[u8]) -> Result<usize, Error> {
+    fn write(&mut self, bytes: &[u8]) -> Result<usize, Error> {
         let mut bytes_written = 0;
         for (i, buf) in bytes.chunks(u8::MAX as usize).enumerate() {
+            // In manual ACK'ing mode we use Slave Byte Control (SBC) which requires using the
+            // NBYTES field to indicate how many TXIS events are generated. We need to set this
+            // up for every 255 bytes because the NBYTES field is only 8 bits wide.
             if i == 0 {
                 self.start_transfer(buf.len());
             } else {
                 self.restart_transfer(buf.len())
             }
-            let count = self.write_all(buf)?;
+            let count = if buf.len() < (u8::MAX as usize) {
+                // This is the last chunk so write out zeroes if we reach the end of the buffer
+                self.write_buf_fill_zeroes(buf)?
+            } else {
+                // Only write the contents of the buffer and move on to the next chunk
+                self.write_buf(buf)?
+            };
             bytes_written += count;
             if count < buf.len() {
                 break;
@@ -1430,51 +1292,170 @@ impl<I2C: Instance, R> I2cTarget<I2C, ManualAck, R> {
         }
         Ok(bytes_written)
     }
+}
 
-    /// Waits for a controller write event and reads the data written by the
-    /// controller to the buffer provided. This will read until the buffer is
-    /// full, or until the transfer is stopped by the controller,
-    /// whichever comes first. If the buffer is filled before the controller
-    /// stops the transaction, the final byte will not be ack'd. The
-    /// I2cTarget::ack_transfer function must be called in this case in order
-    /// to complete the transaction.
+impl<I2C: Instance, R> I2cTarget<I2C, ManualAck, R> {
+    /// This will start a transfer operation in manual ACK'ing mode.
     ///
-    /// If the controller read event or a stop condition is received, an error
-    /// will be returned.
+    /// When performing a read operation the caller must pass the number
+    /// of bytes that will be read before a manual ACK will be performed. All
+    /// bytes prior to that will be ACK'd automatically.
+    ///
+    /// When performing a write operation this determines how many TXIS events
+    /// will be generated for event handling (typically via interrupts).
+    fn start_transfer(&mut self, expected_bytes: usize) {
+        self.i2c
+            .cr2()
+            .modify(|_, w| w.nbytes().set(expected_bytes as u8));
+        self.i2c.icr().write(|w| w.addrcf().clear());
+    }
+
+    /// End a transfer in manual ACK'ing mode. This should only be called after
+    /// the expected number of bytes have been read (as set up with
+    /// I2cTarget::start_transfer), otherwise the bus might hang.
+    fn end_transfer(&mut self) {
+        self.i2c.cr2().modify(|_, w| w.reload().completed());
+    }
+
+    /// Restart a transfer in manual ACK'ing mode.
+    ///
+    /// When performing a read operation, this allows partial reads of a
+    /// transaction with manual ACK'ing together with I2cTarget::start_transfer.
+    /// To handle a single byte between each ACK, set expected_bytes to 1
+    /// before each read.
+    ///
+    /// When performing a write operation this determines how many TXIS events
+    /// will be generated for event handling (typically via interrupts)
+    fn restart_transfer(&mut self, expected_bytes: usize) {
+        self.i2c
+            .cr2()
+            .modify(|_, w| w.nbytes().set(expected_bytes as u8));
+    }
+
+    /// End the transfer by ACK'ing the last byte in a read transfer after
+    /// using the I2cTarget::read function in manual ACK'ing mode. This
+    /// should only be called when the controller is not expected to send any
+    /// more bytes, otherwise the bus will hang.
+    pub fn ack_transfer(&mut self) {
+        self.end_transfer();
+    }
+
+    /// End the transfer by NACK'ing the last received byte
+    pub fn nack_transfer(&mut self) {
+        self.nack();
+        self.end_transfer();
+    }
+}
+
+// We don't need to to expose TargetAckMode publically. All the public methods that
+// wrap the allowable implementations are exposed below.
+#[allow(private_bounds)]
+impl<I2C, A, R> I2cTarget<I2C, A, R>
+where
+    Self: TargetAckMode,
+{
+    /// Blocks until this device to be addressed or for a transaction to be
+    /// stopped. When the device is addressed, a `TargetEvent::Read` or
+    /// `TargetEvent::Write` event will be returned. If the transaction was
+    /// stopped, `TargetEvent::Stop` will be returned.
+    ///
+    /// If an error occurs while waiting for an event, this will be returned.
+    pub fn wait_for_event(&mut self) -> Result<TargetEvent, Error> {
+        loop {
+            if let Some(event) = self.get_target_event()? {
+                return Ok(event);
+            }
+        }
+    }
+
+    /// Perform a blocking read.
+    ///
+    /// If no error occurs, this will read until the buffer is full, or until
+    /// the transfer is stopped by the controller, whichever comes first.
     ///
     /// The function will return the number of bytes received wrapped in the
     /// Ok result, or an error if one occurred.
+    ///
+    /// ## Auto-ACK'ing mode
+    /// When the buffer is full the controller will be NACK'd for any
+    /// subsequent byte received.
+    ///
+    /// ## Manual ACK'ing mode:
+    /// If the buffer is filled before the controller stops the transaction,
+    /// the final byte will not be ACK'd, but the function will return. The
+    /// I2cTarget::ack_transfer function must be called in this case in order
+    /// to complete the transaction.
+    ///
+    /// Note: this function should not be called to read less than the expected
+    /// number of bytes in the total transaction. This could potentially leave
+    /// the bus in a bad state.
+    pub fn read(&mut self, buffer: &mut [u8]) -> Result<usize, Error> {
+        TargetAckMode::read(self, buffer)
+    }
+
+    /// Perform a blocking write to the bus. This will write the
+    /// contents of the buffer, followed by zeroes if the controller keeps
+    /// clocking the bus. If the controller NACKs at any point the function
+    /// will return with an Ok result.
+    ///
+    /// The function will return the number of bytes written wrapped in the
+    /// Ok result, or an error if one occurred.
+    pub fn write(&mut self, bytes: &[u8]) -> Result<usize, Error> {
+        TargetAckMode::write(self, bytes)
+    }
+
+    /// Waits for a controller write event and reads the data written by the
+    /// controller to the buffer provided. This will read until the buffer is
+    /// full, or until the transfer is stopped by the controller, whichever
+    /// comes first.
+    ///
+    /// If the a bus error occurs or a stop condition is received, an error
+    /// will be returned, otherwise the number of bytes received wrapped in an
+    /// Ok result will be returned
+    ///
+    /// ## Auto ACK'ing mode
+    /// This will read until the buffer is full, at which point the controller
+    /// will be NACK'd for any subsequent bytes received.
+    ///
+    /// ## Manual ACK'ing mode
+    /// If the buffer is filled before the controller stops the transaction,
+    /// the final byte will not be ACK'd. The I2cTarget::ack_transfer function
+    /// must be called in this case in order to complete the transaction.
+    ///
+    /// ## Note:
+    /// Any one of the configured primary or secondary addresses will be
+    /// matched against. This method is not be suitable for use when
+    /// different operations must be performed depending upon the received
+    /// address.
     pub fn wait_for_target_read(
         &mut self,
         buffer: &mut [u8],
     ) -> Result<usize, Error> {
         match self.wait_for_event()? {
-            TargetEvent::TargetWrite { address: _ } => {
+            TargetEvent::Read { address: _ } => {
                 Err(Error::ControllerExpectedWrite)
             }
-            TargetEvent::TargetRead { address: _ } => self.read(buffer),
+            TargetEvent::Write { address: _ } => self.read(buffer),
             TargetEvent::Stop => Err(Error::TransferStopped),
         }
     }
 
     /// Waits for a controller read event and writes the contents of the
     /// buffer, followed by zeroes if the controller keeps clocking the bus. If
-    /// the controller nacks at any point the write will be terminated and the
+    /// the controller NACKs at any point the write will be terminated and the
     /// function will return with an Ok result indicating the number of bytes
-    /// written before the nack occurred.
+    /// written before the NACK occurred.
     ///
-    /// If the controller write event or a stop condition is received, an error
-    /// will be returned.
-    ///
-    /// The function will return the number of bytes written wrapped in the
-    /// Ok result, or an error if one occurred.
+    /// If a bus error occurs or a stop condition is received, the function
+    /// will return an error, otherwise it will return the number of bytes
+    /// written wrapped in an Ok result.
     pub fn wait_for_target_write(
         &mut self,
         bytes: &[u8],
     ) -> Result<usize, Error> {
         match self.wait_for_event()? {
-            TargetEvent::TargetWrite { address: _ } => self.write(bytes),
-            TargetEvent::TargetRead { address: _ } => {
+            TargetEvent::Read { address: _ } => self.write(bytes),
+            TargetEvent::Write { address: _ } => {
                 Err(Error::ControllerExpectedRead)
             }
             TargetEvent::Stop => Err(Error::TransferStopped),
@@ -1487,28 +1468,14 @@ impl<I2C: Instance, R> I2cTarget<I2C, ManualAck, R> {
     /// otherwise an Ok result is returned when the stop condition is received.
     pub fn wait_for_stop(&mut self) -> Result<(), Error> {
         match self.wait_for_event()? {
-            TargetEvent::TargetWrite { address: _ } => {
+            TargetEvent::Read { address: _ } => {
                 Err(Error::ControllerExpectedWrite)
             }
-            TargetEvent::TargetRead { address: _ } => {
+            TargetEvent::Write { address: _ } => {
                 Err(Error::ControllerExpectedRead)
             }
             TargetEvent::Stop => Ok(()),
         }
-    }
-
-    /// End the transfer by ACK'ing the last byte in a read transfer after
-    /// using the I2cTarget::read function in manual acking mode. This
-    /// should only be called when the controller is not expected to send any
-    /// more bytes, otherwise the bus will hang.
-    pub fn ack_transfer(&mut self) {
-        self.end_transfer();
-    }
-
-    /// End the transfer by NACK'ing the last received byte
-    pub fn nack_transfer(&mut self) {
-        self.nack();
-        self.end_transfer();
     }
 }
 
