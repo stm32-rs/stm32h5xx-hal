@@ -908,7 +908,11 @@ impl<I2C: Instance, R> I2c<I2C, R> {
         direction: Direction,
         stop: Stop,
     ) {
-        assert!(length < 256 && length > 0);
+        assert!(
+            length <= u8::MAX as usize,
+            "I2C max transaction size = {} bytes",
+            u8::MAX
+        );
 
         // Set START condition and
         self.i2c.cr2().write(|w| {
@@ -949,6 +953,12 @@ impl<I2C: Instance, R> I2c<I2C, R> {
         direction: Direction,
         stop: Stop,
     ) {
+        assert!(
+            length <= u8::MAX as usize,
+            "I2C max transaction size = {} bytes",
+            u8::MAX
+        );
+
         self.i2c.cr2().write(|w| {
             w.rd_wrn()
                 .bit(direction == Direction::Read)
@@ -979,6 +989,12 @@ impl<I2C: Instance, R> I2c<I2C, R> {
     ///
     /// See the sequence diagrams in Figures 390 & 393 of RM0492 Rev 2 for more.
     fn reload(&self, length: usize, direction: Direction, stop: Stop) {
+        assert!(
+            length <= u8::MAX as usize,
+            "I2C max transfer size per reload = {}",
+            u8::MAX
+        );
+
         self.i2c.cr2().write(|w| {
             w.rd_wrn()
                 .bit(direction == Direction::Read)
