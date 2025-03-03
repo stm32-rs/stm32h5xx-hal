@@ -1147,6 +1147,19 @@ impl<I2C: Instance, A, R> I2cTarget<I2C, A, R> {
         }
         unreachable!();
     }
+
+    fn get_address(&self, addcode: u8) -> u16 {
+        const I2C_RESERVED_ADDR_MASK: u8 = 0x7C;
+        const I2C_10BIT_HEADER_CODE: u8 = 0x78;
+
+        if (addcode & I2C_RESERVED_ADDR_MASK) == I2C_10BIT_HEADER_CODE {
+            // No need to check if we're using 7 bits to perform a shift because we wouldn't
+            // have received a 10-bit address unless we were listening for it
+            self.i2c.oar1().read().oa1().bits()
+        } else {
+            addcode as u16
+        }
+    }
 }
 
 trait TargetAckMode {
@@ -1168,16 +1181,13 @@ impl<I2C: Instance, R> TargetAckMode for I2cTarget<I2C, AutoAck, R> {
                 self.i2c.isr().write(|w| w.txe().set_bit());
             }
             self.i2c.icr().write(|w| w.addrcf().clear());
-            let address = isr.addcode().bits();
+
+            let address = self.get_address(isr.addcode().bits());
+
             if isr.dir().is_read() {
-                // TODO: Translate address into 10-bit stored address if relevant
-                Ok(Some(TargetEvent::Read {
-                    address: address as u16,
-                }))
+                Ok(Some(TargetEvent::Read { address }))
             } else {
-                Ok(Some(TargetEvent::Write {
-                    address: address as u16,
-                }))
+                Ok(Some(TargetEvent::Write { address }))
             }
         } else if isr.stopf().is_stop() {
             self.i2c.icr().write(|w| w.stopcf().clear());
@@ -1220,22 +1230,17 @@ impl<I2C: Instance, R> TargetAckMode for I2cTarget<I2C, ManualAck, R> {
                 .cr2()
                 .modify(|_, w| w.reload().completed().nbytes().set(0));
 
-            let address = isr.addcode().bits();
+            let address = self.get_address(isr.addcode().bits());
 
             if isr.dir().is_read() {
                 self.i2c.icr().write(|w| w.addrcf().clear());
-                // TODO: Translate address into 10-bit stored address if relevant
-                Ok(Some(TargetEvent::Read {
-                    address: address as u16,
-                }))
+                Ok(Some(TargetEvent::Read { address }))
             } else {
                 // Manual ACK control uses slave byte control mode when reading data from the
                 // controller, so set it up here.
                 self.i2c.cr1().modify(|_, w| w.sbc().enabled());
                 self.i2c.cr2().modify(|_, w| w.reload().not_completed());
-                Ok(Some(TargetEvent::Write {
-                    address: address as u16,
-                }))
+                Ok(Some(TargetEvent::Write { address }))
             }
         } else if isr.stopf().is_stop() {
             self.i2c.icr().write(|w| w.stopcf().clear());
