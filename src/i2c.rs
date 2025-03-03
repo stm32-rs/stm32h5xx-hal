@@ -1125,7 +1125,9 @@ impl<I2C: Instance, A, R> I2cTarget<I2C, A, R> {
         for (i, data) in bytes.iter().enumerate() {
             match self.write_byte(*data) {
                 Ok(()) => {}
-                Err(Error::NotAcknowledge) => return Ok(i),
+                // If we receive a NACK it will be on the FIFO write subsequent to the last byte
+                // actually written to the bus
+                Err(Error::NotAcknowledge) => return Ok(i - 1),
                 Err(error) => return Err(error),
             }
         }
@@ -1141,7 +1143,12 @@ impl<I2C: Instance, A, R> I2cTarget<I2C, A, R> {
         for (i, data) in bytes.iter().chain(iter::repeat(&0)).enumerate() {
             match self.write_byte(*data) {
                 Ok(()) => {}
-                Err(Error::NotAcknowledge) => return Ok(core::cmp::min(i, bytes.len())),
+                Err(Error::NotAcknowledge) => {
+                    // If we receive a NACK it will be on the FIFO write subsequent to the last byte
+                    // actually written to the bus. If we start writing zeroes out, we only want to
+                    // indicate how many bytes from the buffer we wrote.
+                    return Ok(core::cmp::min(i - 1, bytes.len()));
+                }
                 Err(error) => return Err(error),
             }
         }
