@@ -60,7 +60,7 @@ fn setup_clocks(prec: rec::Rng, clocks: &CoreClocks) -> Hertz {
 ))]
 
 /// Note:
-/// This uses the register values specified in AN4230 but verification 
+/// This uses the register values specified in AN4230 but verification
 /// using this HAL has not been performed. Users can/should do their
 /// own verification or request documentation from ST directly.
 /// Requires RNG to be disabled since some register values can only be written when RNGEN = 0
@@ -75,7 +75,7 @@ pub trait RngNist {
 ))]
 impl RngNist for RNG {
     /// Note:
-    /// This uses the register values specified in AN4230 but verification 
+    /// This uses the register values specified in AN4230 but verification
     /// using this HAL has not been performed. Users can/should do their
     /// own verification or request documentation from ST directly.
     /// Requires RNG to be disabled since some register values can only be written when RNGEN = 0
@@ -141,7 +141,7 @@ impl RngExt for RNG {
         self.htcr().write(|w| unsafe { w.bits(0xAAC7) });
 
         // Set noise source control register
-        // Note: 
+        // Note:
         // This is currently not available in the PAC or SVD for H503 but is planned to be added
         #[cfg(not(feature = "stm32h503"))]
         self.nscr().write(|w| unsafe { w.bits(0x0003FFFF) });
