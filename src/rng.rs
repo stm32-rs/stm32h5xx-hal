@@ -15,7 +15,7 @@ use crate::time::Hertz;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum ErrorKind {
+pub enum Error {
     ///Note: The clock error has no impact on generated random numbers that is the application can still read the RNG_DR register
     ClockError = 0,
     SeedError = 1,
@@ -33,7 +33,7 @@ fn kernel_clk_unwrap(prec: rec::Rng, clocks: &CoreClocks) -> Hertz {
             clocks.hsi48_ck().expect("RNG: HSI48 must be enabled")
         }
         RngClkSel::Pll1Q => {
-            clocks.pll1_q_ck().expect("RNG: PLL1_Q must be enabled")
+            clocks.pll1().q_ck().expect("RNG: PLL1_Q must be enabled")
         }
         RngClkSel::Lse => unimplemented!(),
         RngClkSel::Lsi => clocks.lsi_ck().expect("RNG: LSI must be enabled"),
@@ -59,8 +59,10 @@ fn setup_clocks(prec: rec::Rng, clocks: &CoreClocks) -> Hertz {
     feature = "stm32h573",
 ))]
 
-/// This uses the register values specified in AN4230 but have not
-/// performed the verification (buyer beware, users can/should do their own verification)
+/// Note:
+/// This uses the register values specified in AN4230 but verification 
+/// using this HAL has not been performed. Users can/should do their
+/// own verification or request documentation from ST directly.
 /// Requires RNG to be disabled since some register values can only be written when RNGEN = 0
 pub trait RngNist {
     fn rng_nist_st_an4230(self, prec: rec::Rng, clocks: &CoreClocks) -> Rng;
@@ -72,8 +74,10 @@ pub trait RngNist {
     feature = "stm32h573"
 ))]
 impl RngNist for RNG {
-    /// This uses the register values specified in AN4230 but have not
-    /// performed the verification (buyer beware, users can/should do their own verification)
+    /// Note:
+    /// This uses the register values specified in AN4230 but verification 
+    /// using this HAL has not been performed. Users can/should do their
+    /// own verification or request documentation from ST directly.
     /// Requires RNG to be disabled since some register values can only be written when RNGEN = 0
     fn rng_nist_st_an4230(self, prec: rec::Rng, clocks: &CoreClocks) -> Rng {
         let rng_clk = setup_clocks(prec, clocks);
@@ -137,7 +141,9 @@ impl RngExt for RNG {
         self.htcr().write(|w| unsafe { w.bits(0xAAC7) });
 
         // Set noise source control register
-        #[cfg(not(feature = "stm32h503"))] // Not available on H503
+        // Note: 
+        // This is currently not available in the PAC or SVD for H503 but is planned to be added
+        #[cfg(not(feature = "stm32h503"))]
         self.nscr().write(|w| unsafe { w.bits(0x0003FFFF) });
 
         // Configuration done, reset CONDRST, its value goes to 0 when the reset process is
@@ -197,8 +203,8 @@ impl RngExt for RNG {
 }
 
 pub trait RngCore<W> {
-    fn gen(&mut self) -> Result<W, ErrorKind>;
-    fn fill(&mut self, dest: &mut [W]) -> Result<(), ErrorKind>;
+    fn gen(&mut self) -> Result<W, Error>;
+    fn fill(&mut self, dest: &mut [W]) -> Result<(), Error>;
 }
 
 pub struct Rng {
@@ -207,17 +213,17 @@ pub struct Rng {
 
 impl Rng {
     /// Returns 32 bits of randomness, or error
-    pub fn value(&mut self) -> Result<u32, ErrorKind> {
+    pub fn value(&mut self) -> Result<u32, Error> {
         nb::block!(self.nb_value())
     }
 
     /// Returns 32 bits of randomness, or error
-    pub fn nb_value(&mut self) -> nb::Result<u32, ErrorKind> {
+    pub fn nb_value(&mut self) -> nb::Result<u32, Error> {
         let status = self.rb.sr().read();
         if status.cecs().bit() {
-            Err(nb::Error::Other(ErrorKind::ClockError))
+            Err(nb::Error::Other(Error::ClockError))
         } else if status.secs().bit() {
-            Err(nb::Error::Other(ErrorKind::SeedError))
+            Err(nb::Error::Other(Error::SeedError))
         } else if status.drdy().bit() {
             Ok(self.rb.dr().read().rndata().bits())
         } else {
@@ -253,13 +259,13 @@ macro_rules! rng_core {
         $(
             impl RngCore<$type> for Rng {
                 /// Returns a single element with random value, or error
-                fn gen(&mut self) -> Result<$type, ErrorKind> {
+                fn gen(&mut self) -> Result<$type, Error> {
                     let val = self.value()?;
                     Ok(val as $type)
                 }
 
                 /// Fills buffer with random values, or return error
-                fn fill(&mut self, buffer: &mut [$type]) -> Result<(), ErrorKind> {
+                fn fill(&mut self, buffer: &mut [$type]) -> Result<(), Error> {
                     const BATCH_SIZE: usize = mem::size_of::<u32>() / mem::size_of::<$type>();
                     let mut i = 0_usize;
                     while i < buffer.len() {
@@ -285,7 +291,7 @@ macro_rules! rng_core_large {
     ($($type:ty),+) => {
         $(
             impl RngCore<$type> for Rng {
-                fn gen(&mut self) -> Result<$type, ErrorKind> {
+                fn gen(&mut self) -> Result<$type, Error> {
                     const WORDS: usize = mem::size_of::<$type>() / mem::size_of::<u32>();
                     let mut res: $type = 0;
 
@@ -296,7 +302,7 @@ macro_rules! rng_core_large {
                     Ok(res)
                 }
 
-                fn fill(&mut self, dest: &mut [$type]) -> Result<(), ErrorKind> {
+                fn fill(&mut self, dest: &mut [$type]) -> Result<(), Error> {
                     let len = dest.len() * (mem::size_of::<$type>() / mem::size_of::<u32>());
                     let ptr = dest.as_mut_ptr() as *mut u32;
                     let slice_u32 = unsafe { core::slice::from_raw_parts_mut(ptr, len) };
@@ -311,12 +317,12 @@ macro_rules! rng_core_transmute {
     ($($type:ty = $from:ty),+) => {
         $(
             impl RngCore<$type> for Rng {
-                fn gen(&mut self) -> Result<$type, ErrorKind> {
+                fn gen(&mut self) -> Result<$type, Error> {
                     let num = <Self as RngCore<$from>>::gen(self)?;
                     Ok(unsafe { mem::transmute::<$from, $type>(num) })
                 }
 
-                fn fill(&mut self, dest: &mut [$type]) -> Result<(), ErrorKind> {
+                fn fill(&mut self, dest: &mut [$type]) -> Result<(), Error> {
                     let unsigned_slice = unsafe { mem::transmute::<&mut [$type], &mut [$from]>(dest) };
                     <Self as RngCore<$from>>::fill(self, unsigned_slice)
                 }
