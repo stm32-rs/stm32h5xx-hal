@@ -21,7 +21,7 @@ jobs:
           - stm32h563
           - stm32h573
     env:                        # Peripheral Feature flags
-      FLAGS: rt,log
+      FLAGS: rt,log,defmt
 
     steps:
       - uses: actions/checkout@v4
