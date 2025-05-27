@@ -43,6 +43,7 @@ impl Default for PllConfig {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 struct VcoRange {
     output_range: RangeInclusive<u32>,
     input_range: RangeInclusive<u32>,
@@ -61,12 +62,14 @@ const VCO_RANGE_WIDE: VcoRange = VcoRange {
 };
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 struct PllOutput {
     ck: u32,
     div: u32,
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 struct PllSetup {
     vco_range: VcoRange,
     vco_out_target: u32,
