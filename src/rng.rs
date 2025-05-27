@@ -115,7 +115,7 @@ impl RngNist for RNG {
 
         Rng {
             rb: self,
-            mode: NIST,
+            _mode: NIST,
         }
     }
 }
