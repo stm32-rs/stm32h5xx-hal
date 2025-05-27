@@ -65,7 +65,11 @@ fn setup_clocks(prec: rec::Rng, clocks: &CoreClocks) -> Hertz {
 /// own verification or request documentation from ST directly.
 /// Requires RNG to be disabled since some register values can only be written when RNGEN = 0
 pub trait RngNist {
-    fn rng_nist_st_an4230(self, prec: rec::Rng, clocks: &CoreClocks) -> Rng;
+    fn rng_nist_st_an4230(
+        self,
+        prec: rec::Rng,
+        clocks: &CoreClocks,
+    ) -> Rng<NIST>;
 }
 
 #[cfg(any(
@@ -79,7 +83,11 @@ impl RngNist for RNG {
     /// using this HAL has not been performed. Users can/should do their
     /// own verification or request documentation from ST directly.
     /// Requires RNG to be disabled since some register values can only be written when RNGEN = 0
-    fn rng_nist_st_an4230(self, prec: rec::Rng, clocks: &CoreClocks) -> Rng {
+    fn rng_nist_st_an4230(
+        self,
+        prec: rec::Rng,
+        clocks: &CoreClocks,
+    ) -> Rng<NIST> {
         let rng_clk = setup_clocks(prec, clocks);
 
         // ST has tested this configuration only with a RNG clock of 48MHz
@@ -105,18 +113,21 @@ impl RngNist for RNG {
         // Enable RNG
         self.cr().modify(|_, w| w.rngen().set_bit());
 
-        Rng { rb: self }
+        Rng {
+            rb: self,
+            mode: NIST,
+        }
     }
 }
 
 pub trait RngExt {
-    fn rng(self, prec: rec::Rng, clocks: &CoreClocks) -> Rng;
-    fn rng_fast(self, prec: rec::Rng, clocks: &CoreClocks) -> Rng;
+    fn rng(self, prec: rec::Rng, clocks: &CoreClocks) -> Rng<NORMAL>;
+    fn rng_fast(self, prec: rec::Rng, clocks: &CoreClocks) -> Rng<FAST>;
 }
 
 impl RngExt for RNG {
     /// This uses the register values specified in RM0481 Rev 2 section 32.6.2 RNG configuration C
-    fn rng(self, prec: rec::Rng, clocks: &CoreClocks) -> Rng {
+    fn rng(self, prec: rec::Rng, clocks: &CoreClocks) -> Rng<NORMAL> {
         setup_clocks(prec, clocks);
 
         // Set control register values, also need to write 1 to CONDRST to be able to set the other values
@@ -156,11 +167,14 @@ impl RngExt for RNG {
         // Enable RNG
         self.cr().modify(|_, w| w.rngen().set_bit());
 
-        Rng { rb: self }
+        Rng {
+            rb: self,
+            _mode: NORMAL,
+        }
     }
 
     /// This uses the register values specified in RM0481 Rev 2 section 32.6.2 RNG configuration B
-    fn rng_fast(self, prec: rec::Rng, clocks: &CoreClocks) -> Rng {
+    fn rng_fast(self, prec: rec::Rng, clocks: &CoreClocks) -> Rng<FAST> {
         setup_clocks(prec, clocks);
 
         // Set control register values, also need to write 1 to CONDRST to be able to set the other values
@@ -198,7 +212,10 @@ impl RngExt for RNG {
         // Enable RNG
         self.cr().modify(|_, w| w.rngen().set_bit());
 
-        Rng { rb: self }
+        Rng {
+            rb: self,
+            _mode: FAST,
+        }
     }
 }
 
@@ -207,27 +224,39 @@ pub trait RngCore<W> {
     fn fill(&mut self, dest: &mut [W]) -> Result<(), Error>;
 }
 
-pub struct Rng {
+#[cfg(any(
+    feature = "stm32h562",
+    feature = "stm32h563",
+    feature = "stm32h573"
+))]
+/// NIST mode (type state)
+/// Use [RngNist::rng_nist_st_an4230] to generate [Rng] in this mode
+pub struct NIST;
+/// FAST mode (type state)
+/// Use [RngExt::rng_fast] to generate [Rng] in this mode
+pub struct FAST;
+/// NORMAL mode (type state)
+/// Use [RngExt::rng] to generate [Rng] in this mode
+pub struct NORMAL;
+
+pub struct Rng<MODE> {
     rb: RNG,
+    _mode: MODE,
 }
 
-impl Rng {
+impl<MODE> Rng<MODE> {
     /// Returns 32 bits of randomness, or error
     pub fn value(&mut self) -> Result<u32, Error> {
-        nb::block!(self.nb_value())
-    }
+        loop {
+            let status = self.rb.sr().read();
 
-    /// Returns 32 bits of randomness, or error
-    pub fn nb_value(&mut self) -> nb::Result<u32, Error> {
-        let status = self.rb.sr().read();
-        if status.cecs().bit() {
-            Err(nb::Error::Other(Error::ClockError))
-        } else if status.secs().bit() {
-            Err(nb::Error::Other(Error::SeedError))
-        } else if status.drdy().bit() {
-            Ok(self.rb.dr().read().rndata().bits())
-        } else {
-            Err(nb::Error::WouldBlock)
+            if status.cecs().bit() {
+                return Err(Error::ClockError);
+            } else if status.secs().bit() {
+                return Err(Error::SeedError);
+            } else if status.drdy().bit() {
+                return Ok(self.rb.dr().read().rndata().bits());
+            }
         }
     }
 
@@ -246,7 +275,7 @@ impl Rng {
     }
 }
 
-impl core::iter::Iterator for Rng {
+impl<MODE> core::iter::Iterator for Rng<MODE> {
     type Item = u32;
 
     fn next(&mut self) -> Option<u32> {
@@ -257,7 +286,7 @@ impl core::iter::Iterator for Rng {
 macro_rules! rng_core {
     ($($type:ty),+) => {
         $(
-            impl RngCore<$type> for Rng {
+            impl<MODE> RngCore<$type> for Rng<MODE> {
                 /// Returns a single element with random value, or error
                 fn gen(&mut self) -> Result<$type, Error> {
                     let val = self.value()?;
@@ -290,7 +319,7 @@ macro_rules! rng_core {
 macro_rules! rng_core_large {
     ($($type:ty),+) => {
         $(
-            impl RngCore<$type> for Rng {
+            impl<MODE> RngCore<$type> for Rng<MODE> {
                 fn gen(&mut self) -> Result<$type, Error> {
                     const WORDS: usize = mem::size_of::<$type>() / mem::size_of::<u32>();
                     let mut res: $type = 0;
@@ -316,7 +345,7 @@ macro_rules! rng_core_large {
 macro_rules! rng_core_transmute {
     ($($type:ty = $from:ty),+) => {
         $(
-            impl RngCore<$type> for Rng {
+            impl<MODE> RngCore<$type> for Rng<MODE> {
                 fn gen(&mut self) -> Result<$type, Error> {
                     let num = <Self as RngCore<$from>>::gen(self)?;
                     Ok(unsafe { mem::transmute::<$from, $type>(num) })
@@ -359,7 +388,7 @@ rng_core_large!(usize);
 // rand_core
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-impl rand_core::RngCore for Rng {
+impl<MODE> rand_core::RngCore for Rng<MODE> {
     /// Generate a random u32
     /// Panics if RNG fails.
     fn next_u32(&mut self) -> u32 {
@@ -393,3 +422,10 @@ impl rand_core::RngCore for Rng {
         })
     }
 }
+
+#[cfg(all(
+    feature = "rand",
+    any(feature = "stm32h562", feature = "stm32h563", feature = "stm32h573")
+))]
+#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
+impl rand_core::CryptoRng for Rng<NIST> {}
