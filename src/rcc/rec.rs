@@ -111,7 +111,7 @@ pub trait RecTokenizer: ResetEnable + Sized {
     fn tokenize(self) -> Token<Self> {
         self.enable().reset();
 
-        Token {ph: PhantomData {} }
+        Token { ph: PhantomData {} }
     }
 }
 
