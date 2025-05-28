@@ -100,6 +100,21 @@ pub enum LowPowerMode {
     Enabled,
 }
 
+/// A Token to represent a peripheral has been enabled
+pub struct Token<P> {
+    ph: PhantomData<P>,
+}
+
+/// A trait to represent that a peripheral can be turned into a token
+pub trait RecTokenizer: ResetEnable + Sized {
+    /// Turns the ResetEnable into a token
+    fn tokenize(self) -> Token<Self> {
+        self.enable().reset();
+
+        Token { ph: PhantomData {} }
+    }
+}
+
 impl Rcc {
     /// Returns all the peripherals resets / enables / kernel clocks.
     ///
@@ -459,6 +474,14 @@ macro_rules! variant_return_type {
     };
 }
 
+macro_rules! tokenable {
+    ($($TK:ty),*) => {
+        $(
+            impl RecTokenizer for $TK {}
+        )*
+    };
+}
+
 // Enumerate all peripherals and optional clock multiplexers
 //
 // Peripherals are grouped by bus for convenience. Each bus is specified like:
@@ -646,3 +669,5 @@ peripheral_reset_and_enable_control! {
         I3c2 [kernel clk: I3c2(Variant) I3C ccipr4 "I3C2"]
     ];
 }
+
+tokenable!(Fdcan);
