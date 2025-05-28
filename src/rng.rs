@@ -278,10 +278,10 @@ impl<MODE> Rng<MODE> {
 }
 
 impl<MODE> core::iter::Iterator for Rng<MODE> {
-    type Item = u32;
+    type Item = Result<u32, Error>;
 
-    fn next(&mut self) -> Option<u32> {
-        self.value().ok()
+    fn next(&mut self) -> Option<Self::Item> {
+        Some(self.value())
     }
 }
 
