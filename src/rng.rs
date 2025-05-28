@@ -6,6 +6,7 @@
 //! - [Random Blinky](https://github.com/stm32-rs/stm32h5xx-hal/blob/master/examples/blinky_random.rs)
 
 use core::cmp;
+use core::marker::PhantomData;
 use core::mem;
 
 use crate::rcc::{rec, rec::RngClkSel};
@@ -113,10 +114,7 @@ impl RngNist for RNG {
         // Enable RNG
         self.cr().modify(|_, w| w.rngen().set_bit());
 
-        Rng {
-            rb: self,
-            _mode: NIST,
-        }
+        Rng::new(self)
     }
 }
 
@@ -167,10 +165,7 @@ impl RngExt for RNG {
         // Enable RNG
         self.cr().modify(|_, w| w.rngen().set_bit());
 
-        Rng {
-            rb: self,
-            _mode: NORMAL,
-        }
+        Rng::new(self)
     }
 
     /// This uses the register values specified in RM0481 Rev 2 section 32.6.2 RNG configuration B
@@ -212,10 +207,7 @@ impl RngExt for RNG {
         // Enable RNG
         self.cr().modify(|_, w| w.rngen().set_bit());
 
-        Rng {
-            rb: self,
-            _mode: FAST,
-        }
+        Rng::new(self)
     }
 }
 
@@ -241,11 +233,19 @@ pub struct NORMAL;
 
 pub struct Rng<MODE> {
     rb: RNG,
-    _mode: MODE,
+    _mode: PhantomData<MODE>,
 }
 
 impl<MODE> Rng<MODE> {
+    fn new(rb: RNG) -> Self {
+        Self {
+            rb,
+            _mode: PhantomData,
+        }
+    }
     /// Returns 32 bits of randomness, or error
+    /// Automatically resets the seed error flag upon SeedError but will still return SeedError
+    /// Upon receiving SeedError the user is expected to keep polling this function until a valid value is returned
     pub fn value(&mut self) -> Result<u32, Error> {
         loop {
             let status = self.rb.sr().read();
@@ -253,6 +253,8 @@ impl<MODE> Rng<MODE> {
             if status.cecs().bit() {
                 return Err(Error::ClockError);
             } else if status.secs().bit() {
+                // Reset seed error flag so as to leave the peripheral in a valid state ready for use
+                self.rb.sr().modify(|_, w| w.seis().clear_bit());
                 return Err(Error::SeedError);
             } else if status.drdy().bit() {
                 return Ok(self.rb.dr().read().rndata().bits());
