@@ -77,6 +77,7 @@ cortex-m-log = { version = "0.8.0", features = ["itm", "semihosting", "log-integ
 cortex-m-semihosting = "0.5.0"
 panic-itm = { version = "~0.4.1" }
 panic-semihosting = "0.6"
+embedded-test = "0.6.1"
 
 [profile.release]
 codegen-units = 1 # better optimizations
@@ -91,3 +92,11 @@ required-features = ["stm32h503"]
 [[example]]
 name = "i2c"
 required-features = ["stm32h503"]
+
+[[test]]
+name = "nucleo-h533"
+harness = false
+required-features = ["stm32h533", "defmt"]
+
+[lib]
+test = false
