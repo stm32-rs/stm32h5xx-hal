@@ -16,21 +16,36 @@ pub const CYCLES_PER_US: u32 = F_SYS.raw() / 1_000_000;
 use crate::common::is_pax_low;
 use embedded_hal::delay::DelayNs;
 use fugit::RateExtU32;
-use stm32h5xx_hal::{
-    delay::Delay, gpio::GpioExt, pwr::PwrExt, rcc::RccExt, stm32::GPIOA,
-};
+use stm32h5xx_hal::{delay::Delay, gpio::GpioExt, pwr::PwrExt, rcc::RccExt};
 
 #[embedded_test::tests]
 mod tests {
+    use stm32h5xx_hal::gpio::{PinExt, Pull};
+
+    #[test]
+    fn gpio_resistors() {
+        use super::*;
+
+        let (gpioa, mut delay) = init();
+
+        let mut pin = gpioa.pa8.into_pull_down_input();
+        let pin_num = pin.pin_id();
+
+        delay.delay_ms(1); // Give the pin plenty of time to go low
+        assert!(is_pax_low(pin_num));
+
+        pin.set_internal_resistor(Pull::Up);
+        delay.delay_ms(1); // Give the pin plenty of time to go high
+        assert!(!is_pax_low(pin_num));
+    }
     #[test]
     fn gpio_push_pull() {
         use super::*;
 
         let (gpioa, mut delay) = init();
 
-        let _pa1_important_dont_use_as_output = gpioa.pa1.into_floating_input();
         let mut pin = gpioa.pa8.into_push_pull_output();
-        let pin_num = 8; // PA8
+        let pin_num = pin.pin_id();
 
         pin.set_high();
         delay.delay_ms(1); // Give the pin plenty of time to go high
@@ -46,9 +61,9 @@ mod tests {
         use super::*;
 
         let (gpioa, mut delay) = init();
-        let _pa1_important_dont_use_as_output = gpioa.pa1.into_floating_input();
-        let mut pin = gpioa.pa8.into_open_drain_output().internal_pull_up(on);
-        let pin_num = 8; // PA8
+
+        let mut pin = gpioa.pa8.into_open_drain_output().internal_pull_up(true);
+        let pin_num = pin.pin_id();
 
         pin.set_high();
         delay.delay_ms(1); // Give the pin plenty of time to go high
