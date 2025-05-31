@@ -316,12 +316,10 @@ where
 {
     /// Set pin speed
     pub fn set_speed(&mut self, speed: Speed) {
-        let offset = 2 * { N };
-
         unsafe {
             (*Gpio::<P>::ptr())
                 .ospeedr()
-                .modify(|_r, w| w.ospeed(offset).bits(speed as u8));
+                .modify(|_r, w| w.ospeed(N).bits(speed as u8));
         }
     }
 
@@ -338,12 +336,11 @@ where
 {
     /// Set the internal pull-up and pull-down resistor
     pub fn set_internal_resistor(&mut self, resistor: Pull) {
-        let offset = 2 * { N };
         let value = resistor as u8;
         unsafe {
             (*Gpio::<P>::ptr())
                 .pupdr()
-                .modify(|_r, w| w.pupd(offset).bits(value));
+                .modify(|_r, w| w.pupd(N).bits(value));
         }
     }
 
