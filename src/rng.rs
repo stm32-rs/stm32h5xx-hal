@@ -247,6 +247,12 @@ impl<MODE> Rng<MODE> {
             let status = self.rb.sr().read();
 
             if status.cecs().bit() {
+                #[cfg(feature = "log")]
+                log::warn!("RNG Clock error detected, retrying");
+
+                #[cfg(feature = "defmt")]
+                defmt::warn!("RNG Clock error detected, retrying");
+
                 let sr = self.rb.sr();
                 // Give rng some time to recover from clock disturbance, this time seems to be about a handful of milliseconds
                 for _ in 0..100_000 {
@@ -281,10 +287,16 @@ impl<MODE> Rng<MODE> {
 }
 
 impl<MODE> core::iter::Iterator for Rng<MODE> {
-    type Item = Result<u32, SeedError>;
+    type Item = u32;
 
     fn next(&mut self) -> Option<Self::Item> {
-        Some(self.value())
+        loop {
+            match self.value() {
+                Ok(x) => return Some(x),
+                // We recover automatically from a seed error, so try again
+                Err(SeedError) => (),
+            }
+        }
     }
 }
 
