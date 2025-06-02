@@ -247,11 +247,18 @@ impl<MODE> Rng<MODE> {
     /// Automatically resets the seed error flag upon SeedError but will still return SeedError
     /// Upon receiving SeedError the user is expected to keep polling this function until a valid value is returned
     pub fn value(&mut self) -> Result<u32, Error> {
-        loop {
+        'outer: loop {
             let status = self.rb.sr().read();
 
             if status.cecs().bit() {
-                return Err(Error::ClockError);
+                let sr = self.rb.sr();
+                // Give rng some time to recover from clock disturbance, this time seems to be about a handful of milliseconds
+                for _ in 0..100_000 {
+                    if sr.read().cecs().bit_is_clear() {
+                        continue 'outer;
+                    }
+                }
+                panic!("Failed to automatically recover from Rng Clock Error");
             } else if status.secs().bit() {
                 // Reset seed error flag so as to leave the peripheral in a valid state ready for use
                 self.rb.sr().modify(|_, w| w.seis().clear_bit());
