@@ -316,7 +316,7 @@ where
 {
     /// Set pin speed
     pub fn set_speed(&mut self, speed: Speed) {
-        let offset = 2 * { N };
+        let offset = N;
 
         unsafe {
             (*Gpio::<P>::ptr())
@@ -338,7 +338,7 @@ where
 {
     /// Set the internal pull-up and pull-down resistor
     pub fn set_internal_resistor(&mut self, resistor: Pull) {
-        let offset = 2 * { N };
+        let offset = N;
         let value = resistor as u8;
         unsafe {
             (*Gpio::<P>::ptr())
