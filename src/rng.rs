@@ -296,10 +296,9 @@ impl<MODE> core::iter::Iterator for Rng<MODE> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            match self.value() {
-                Ok(x) => return Some(x),
-                // We recover automatically from a seed error, so try again
-                Err(SeedError) => (),
+            // We recover automatically from a seed error, so try again
+            if let Ok(x) = self.value() {
+                return Some(x);
             }
         }
     }
