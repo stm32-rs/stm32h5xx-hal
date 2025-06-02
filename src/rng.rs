@@ -16,11 +16,7 @@ use crate::time::Hertz;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum Error {
-    ///Note: The clock error has no impact on generated random numbers that is the application can still read the RNG_DR register
-    ClockError = 0,
-    SeedError = 1,
-}
+pub struct SeedError;
 
 /// Return the kernel clock for the Random Number Generator
 ///
@@ -212,8 +208,8 @@ impl RngExt for RNG {
 }
 
 pub trait RngCore<W> {
-    fn gen(&mut self) -> Result<W, Error>;
-    fn fill(&mut self, dest: &mut [W]) -> Result<(), Error>;
+    fn gen(&mut self) -> Result<W, SeedError>;
+    fn fill(&mut self, dest: &mut [W]) -> Result<(), SeedError>;
 }
 
 #[cfg(any(
@@ -246,7 +242,7 @@ impl<MODE> Rng<MODE> {
     /// Returns 32 bits of randomness, or error
     /// Automatically resets the seed error flag upon SeedError but will still return SeedError
     /// Upon receiving SeedError the user is expected to keep polling this function until a valid value is returned
-    pub fn value(&mut self) -> Result<u32, Error> {
+    pub fn value(&mut self) -> Result<u32, SeedError> {
         'outer: loop {
             let status = self.rb.sr().read();
 
@@ -262,7 +258,7 @@ impl<MODE> Rng<MODE> {
             } else if status.secs().bit() {
                 // Reset seed error flag so as to leave the peripheral in a valid state ready for use
                 self.rb.sr().modify(|_, w| w.seis().clear_bit());
-                return Err(Error::SeedError);
+                return Err(SeedError);
             } else if status.drdy().bit() {
                 return Ok(self.rb.dr().read().rndata().bits());
             }
@@ -285,7 +281,7 @@ impl<MODE> Rng<MODE> {
 }
 
 impl<MODE> core::iter::Iterator for Rng<MODE> {
-    type Item = Result<u32, Error>;
+    type Item = Result<u32, SeedError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         Some(self.value())
@@ -297,13 +293,13 @@ macro_rules! rng_core {
         $(
             impl<MODE> RngCore<$type> for Rng<MODE> {
                 /// Returns a single element with random value, or error
-                fn gen(&mut self) -> Result<$type, Error> {
+                fn gen(&mut self) -> Result<$type, SeedError> {
                     let val = self.value()?;
                     Ok(val as $type)
                 }
 
                 /// Fills buffer with random values, or return error
-                fn fill(&mut self, buffer: &mut [$type]) -> Result<(), Error> {
+                fn fill(&mut self, buffer: &mut [$type]) -> Result<(), SeedError> {
                     const BATCH_SIZE: usize = mem::size_of::<u32>() / mem::size_of::<$type>();
                     let mut i = 0_usize;
                     while i < buffer.len() {
@@ -329,7 +325,7 @@ macro_rules! rng_core_large {
     ($($type:ty),+) => {
         $(
             impl<MODE> RngCore<$type> for Rng<MODE> {
-                fn gen(&mut self) -> Result<$type, Error> {
+                fn gen(&mut self) -> Result<$type, SeedError> {
                     const WORDS: usize = mem::size_of::<$type>() / mem::size_of::<u32>();
                     let mut res: $type = 0;
 
@@ -340,7 +336,7 @@ macro_rules! rng_core_large {
                     Ok(res)
                 }
 
-                fn fill(&mut self, dest: &mut [$type]) -> Result<(), Error> {
+                fn fill(&mut self, dest: &mut [$type]) -> Result<(), SeedError> {
                     let len = dest.len() * (mem::size_of::<$type>() / mem::size_of::<u32>());
                     let ptr = dest.as_mut_ptr() as *mut u32;
                     let slice_u32 = unsafe { core::slice::from_raw_parts_mut(ptr, len) };
@@ -355,12 +351,12 @@ macro_rules! rng_core_transmute {
     ($($type:ty = $from:ty),+) => {
         $(
             impl<MODE> RngCore<$type> for Rng<MODE> {
-                fn gen(&mut self) -> Result<$type, Error> {
+                fn gen(&mut self) -> Result<$type, SeedError> {
                     let num = <Self as RngCore<$from>>::gen(self)?;
                     Ok(unsafe { mem::transmute::<$from, $type>(num) })
                 }
 
-                fn fill(&mut self, dest: &mut [$type]) -> Result<(), Error> {
+                fn fill(&mut self, dest: &mut [$type]) -> Result<(), SeedError> {
                     let unsigned_slice = unsafe { mem::transmute::<&mut [$type], &mut [$from]>(dest) };
                     <Self as RngCore<$from>>::fill(self, unsigned_slice)
                 }
