@@ -1,8 +1,7 @@
 //! Serial Peripheral Interface (SPI)
 //!
-//! This module provides functionality for SPI as both a Master. It
-//! supports full-duplex, half duplex, simplex transmitter and simplex receiver
-//! modes.
+//! This module provides functionality for SPI as a Master. It supports full-duplex, half duplex,
+//! simplex transmitter and simplex receiver modes.
 //!
 //! It supports both blocking and non-blocking usage. For blocking usage
 //! as a Master `Spi` implements the [embedded-hal][embedded-hal] traits ([`SpiBus`][spi_bus]
