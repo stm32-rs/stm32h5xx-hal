@@ -25,6 +25,7 @@ pub enum Dynamic {
 
 /// Error for [DynamicPin]
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum PinModeError {
     /// For operations unsupported in current mode
     IncorrectMode,

@@ -61,6 +61,7 @@ const VCO_RANGE_WIDE: VcoRange = VcoRange {
 };
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 struct PllOutput {
     ck: u32,
     div: u32,
