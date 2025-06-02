@@ -433,9 +433,9 @@ impl<MODE> rand_core::RngCore for Rng<MODE> {
         &mut self,
         dest: &mut [u8],
     ) -> Result<(), rand_core::Error> {
-        self.fill(dest).map_err(|e| {
+        self.fill(dest).map_err(|_e| {
             core::num::NonZeroU32::new(
-                rand_core::Error::CUSTOM_START + e as u32,
+                rand_core::Error::CUSTOM_START,
             )
             // This should never fail as long as no enum variant is equal to 0
             .expect("Internal hal error")
