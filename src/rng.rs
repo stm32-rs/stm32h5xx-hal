@@ -262,6 +262,11 @@ impl<MODE> Rng<MODE> {
                 }
                 panic!("Failed to automatically recover from Rng Clock Error");
             } else if status.secs().bit() {
+                #[cfg(feature = "log")]
+                log::warn!("RNG Seed error detected, retrying");
+
+                #[cfg(feature = "defmt")]
+                defmt::warn!("RNG Seed error detected, retrying");
                 // Reset seed error flag so as to leave the peripheral in a valid state ready for use
                 self.rb.sr().modify(|_, w| w.seis().clear_bit());
                 return Err(SeedError);
