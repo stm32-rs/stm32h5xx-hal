@@ -1,4 +1,5 @@
 //! Prelude
+pub use embedded_hal_02::prelude::*;
 
 pub use crate::crc::CrcExt as _stm32h5xx_hal_crc_CrcExt;
 pub use crate::delay::DelayExt as _stm32h5xx_hal_delay_DelayExt;
@@ -12,6 +13,7 @@ pub use crate::rcc::RccExt as _stm32h5xx_hal_rcc_RccExt;
 pub use crate::serial::usart::SerialExt as _stm32h5xx_hal_serial_SerialExt;
 pub use crate::spi::SpiExt as _stm32h5xx_hal_spi_SpiExt;
 pub use crate::usb::UsbExt as _stm32h5xx_hal_usb_UsbExt;
+pub use crate::timer::TimerExt as _stm32h5xx_hal_timer_TimerExt;
 
 pub use crate::time::U32Ext as _;
 pub use fugit::{ExtU32 as _, RateExtU32 as _};
