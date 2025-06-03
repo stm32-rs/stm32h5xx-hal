@@ -2,6 +2,9 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![allow(non_camel_case_types)]
 
+pub use nb;
+pub use nb::block;
+
 #[cfg(not(feature = "device-selected"))]
 compile_error!(
     "This crate requires one of the following device features enabled:
@@ -84,6 +87,9 @@ pub mod usb;
 
 #[cfg(feature = "device-selected")]
 pub mod gpdma;
+
+#[cfg(feature = "device-selected")]
+pub mod timer;
 
 #[cfg(feature = "device-selected")]
 mod sealed {
