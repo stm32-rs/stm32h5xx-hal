@@ -1,7 +1,6 @@
 use std::env;
 
 fn main() {
-
     if env::var("TARGET").unwrap() != "thumbv8m.main-none-eabihf" {
         return;
     }
