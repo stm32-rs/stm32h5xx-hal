@@ -75,6 +75,30 @@ mod tests {
         assert!(pin.is_low());
         assert!(is_pax_low(pin_num));
     }
+
+    #[test]
+    fn gpio_settings() {
+        use super::*;
+
+        let (gpioa, _) = init();
+        let pin = gpioa.pa8;
+
+        let mut pin = pin.into_floating_input();
+
+        pin.set_internal_resistor(Pull::Up);
+
+        pin.set_internal_resistor(Pull::Down);
+
+        let pin = pin.into_analog();
+        let pin = pin.into_push_pull_output();
+        let pin = pin.into_open_drain_output();
+        let pin: gpio::Pin<'A', 8, gpio::Alternate<7>> = pin.into_alternate();
+        let mut pin: gpio::Pin<'A', 8, gpio::Alternate<15>> =
+            pin.into_alternate();
+
+        pin.set_speed(gpio::Speed::Low);
+        pin.set_speed(gpio::Speed::VeryHigh);
+    }
 }
 
 fn init() -> (gpio::gpioa::Parts, Delay) {
