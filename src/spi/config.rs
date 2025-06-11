@@ -176,6 +176,10 @@ pub enum HardwareCSMode {
     ///   you must setup the frame with [Spi::setup_transaction]. After everything has been sent,
     ///   you must also clean it up with [Spi::end_transaction].
     FrameTransaction,
+    /// This is the only supported active mode in slave mode. In master mode this can be used to
+    /// detect conflicts (generating a mode fault) in multi-master topologies. See RM0492 Rev 2
+    /// 38.4.7.
+    SlaveSelectInput,
 }
 
 impl HardwareCS {
