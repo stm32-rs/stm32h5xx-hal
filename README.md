@@ -36,10 +36,10 @@ of support for peripherals is shown in the table below.
 |------------|----|---|---|
 | GPIO       | ✅ | - | |
 | ICache     | ✅ | - | |
-| I2C        | ✅ | - | |
+|| I2C        | ✅ | - | |
+| SPI        | ✅ | - | SPI peripheral only (not implemented for USART peripheral) |
 | CAN        | 🚧 | - | |
 | Rng        | 🚧 | [#34](https://github.com/stm32-rs/stm32h5xx-hal/issues/34)| |
-| SPI        | 🚧 | [#36](https://github.com/stm32-rs/stm32h5xx-hal/issues/36) | |
 | UART       | 🚧 | - | |
 | DMA        | 🚧 | - | |
 | ADC        | ❌ | [#35](https://github.com/stm32-rs/stm32h5xx-hal/issues/35) | |
