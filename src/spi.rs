@@ -1,7 +1,11 @@
 //! Serial Peripheral Interface (SPI)
 //!
-//! This module provides functionality for SPI as a Master. It supports full-duplex, half duplex,
-//! simplex transmitter and simplex receiver modes.
+//! This module provides functionality for SPI as both a Master and Slave. It
+//! supports full-duplex, half duplex, simplex transmitter and simplex receiver
+//! modes (both as master and slave).
+//!
+//! Master operation is implemented via the `Spi` struct, while slave operation
+//! is implemented via [`SpiSlave`].
 //!
 //! It supports both blocking and non-blocking usage. For blocking usage
 //! as a Master `Spi` implements the [embedded-hal][embedded-hal] traits ([`SpiBus`][spi_bus]
@@ -11,7 +15,7 @@
 //!
 //! # Usage
 //!
-//! ## Initialization
+//! ## Master
 //! In the simplest case, SPI can be initialised from the device peripheral
 //! and the GPIO pins.
 //!
@@ -55,7 +59,7 @@
 //!     &ccdr.clocks);
 //!```
 //!
-//! ## Blocking API
+//! ### Blocking API
 //! Use the (`SpiBus`)[spi_bus] or (`SpiDevice`)[spi_device] (with hardware control of CS) APIs provided by
 //! [embedded-hal](embedded-hal):
 //!
@@ -79,7 +83,7 @@
 //! spi.transfer(read, &[0x11u8, 0x22, 0x33])?;
 //! ```
 //!
-//! ## Non-blocking API
+//! ### Non-blocking API
 //! To use the non-blocking API, the [`nonblocking::NonBlocking`] trait must be used. Then,
 //! transactions need to be started via one of the start_nonblocking_XXX methods. This will return
 //! a [`transaction::Transaction`] type that can be passed to
@@ -100,6 +104,70 @@
 //!     write = t;
 //! }
 //! ```
+//!
+//! ## Slave
+//!
+//! `SpiSlave` implementation is used similarly to `Spi`. To get a `SpiSlave`
+//! instance without hardware chip select management, initialize with the
+//! required pins:
+//!
+//! ```
+//! use stm32h5xx_hal::spi;
+//!
+//! let dp = ...;                   // Device peripherals
+//! let (sck, miso, mosi) = ...;    // GPIO pins
+//!
+//! let mut spi_slave = dp.SPI1.spi_slave((sck, miso, mosi), spi::MODE_0, ccdr.peripheral.SPI1);
+//! ```
+//!
+//! The API for slave is mostly the same as that of the master
+//! implementation. Again, non-blocking and blocking modes are supported with
+//! the same function calls available to `SpiSlave` (with the exception of the
+//! FullDuplex APIs). Note that there are no embedded-hal traits for Slave
+//! operation so these are specific to this crate.
+//!
+//! Hardware chip select can be enabled by providing a CS pin and configuring
+//! hardware CS mode to be `HardwareCSMode::SlaveSelectInput`:
+//!
+//! ```
+//! use stm32h5xx_hal::spi;
+//!
+//! let dp = ...;                   // Device peripherals
+//! let (sck, miso, mosi, cs) = ...;    // GPIO pins
+//!
+//! let mut spi_slave = dp.SPI2.spi_slave(
+//!     (sck, miso, mosi, cs),
+//!     spi::Config::new(spi::MODE_0)
+//!         .hardware_cs(spi::HardwareCSMode::SlaveSelectInput),
+//!     ccdr.peripheral.SPI2,
+//! );
+//! ```
+//!
+//! It's not necessary to start/stop listening with hardware chip select
+//! management.
+//!
+//! ### Blocking usage
+//! The API is much the same as the (`SpiBus`)[spi_bus] API for master
+//! operation. Whether or not hardware CS management is used or not, the calls
+//! are the same and will block until all data has been transferrred:
+//!
+//! ```
+//! // Transmit only.
+//! spi.write(&[0x11u8, 0x22, 0x33])?;
+//!
+//! // Receive only
+//! let read = &mut [0u8; 3];
+//! spi.read(read)?;
+//!
+//! // Full duplex simultaneous transmit & receive
+//! spi.transfer(read, &[0x11u8, 0x22, 0x33])?;
+//! ```
+//!
+//! ### Non-blocking usage
+//! [`SpiSlave`] also supports the non-blocking API defined by the [`nonblocking::NonBlocking`]
+//! trait and is used in the same way as the master SPI. The only difference is that
+//! the slave does not initiate transactions, but rather waits for the master to do so, so the start
+//! method should be called before the bus master is expected to start a transaction.
 //!
 //! ## Clocks
 //!
@@ -238,6 +306,12 @@ pub struct Spi<SPI, W: Word = u8> {
     _word: PhantomData<W>,
 }
 
+pub struct SpiSlave<SPI, W: Word = u8> {
+    inner: Inner<SPI, W>,
+    use_ssi: bool,
+    _word: PhantomData<W>,
+}
+
 // Implemented by all SPI instances
 pub trait Instance:
     crate::Sealed + Deref<Target = spi1::RegisterBlock> + Sized
@@ -287,6 +361,16 @@ pub trait SpiExt<SPI: Instance + SupportedWordSize<W>, W: Word = u8> {
         PINS: Pins<SPI>,
         CONFIG: Into<Config>;
 
+    fn spi_slave<PINS, CONFIG>(
+        self,
+        _pins: PINS,
+        config: CONFIG,
+        rec: SPI::Rec,
+    ) -> SpiSlave<SPI, W>
+    where
+        PINS: Pins<SPI>,
+        CONFIG: Into<Config>;
+
     fn spi_unchecked<CONFIG>(
         self,
         config: CONFIG,
@@ -294,6 +378,14 @@ pub trait SpiExt<SPI: Instance + SupportedWordSize<W>, W: Word = u8> {
         rec: SPI::Rec,
         clocks: &CoreClocks,
     ) -> Spi<SPI, W>
+    where
+        CONFIG: Into<Config>;
+
+    fn spi_slave_unchecked<CONFIG>(
+        self,
+        config: CONFIG,
+        rec: SPI::Rec,
+    ) -> SpiSlave<SPI, W>
     where
         CONFIG: Into<Config>;
 }
@@ -320,6 +412,25 @@ impl<SPI: Instance + SupportedWordSize<W>, W: Word> SpiExt<SPI, W> for SPI {
         Spi::<SPI, W>::new(self, config, freq, rec, clocks)
     }
 
+    fn spi_slave<PINS, CONFIG>(
+        self,
+        _pins: PINS,
+        config: CONFIG,
+        rec: SPI::Rec,
+    ) -> SpiSlave<SPI, W>
+    where
+        PINS: Pins<SPI>,
+        CONFIG: Into<Config>,
+    {
+        let config = config.into();
+        assert_eq!(
+            config.hardware_cs.enabled(),
+            PINS::HCS_PRESENT,
+            "If the hardware cs is enabled in the config, an HCS pin must be present in the given pins"
+        );
+        SpiSlave::<SPI, W>::new(self, config, rec)
+    }
+
     fn spi_unchecked<CONFIG>(
         self,
         config: CONFIG,
@@ -331,6 +442,17 @@ impl<SPI: Instance + SupportedWordSize<W>, W: Word> SpiExt<SPI, W> for SPI {
         CONFIG: Into<Config>,
     {
         Spi::<SPI, W>::new(self, config, freq, rec, clocks)
+    }
+
+    fn spi_slave_unchecked<CONFIG>(
+        self,
+        config: CONFIG,
+        rec: SPI::Rec,
+    ) -> SpiSlave<SPI, W>
+    where
+        CONFIG: Into<Config>,
+    {
+        SpiSlave::<SPI, W>::new(self, config, rec)
     }
 }
 
@@ -450,6 +572,74 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
                 .variant(config.communication_mode.into())
                 .ssiop()
                 .variant(cs_polarity)
+        });
+
+        self
+    }
+}
+
+impl<SPI: Instance, W: Word> SpiSlave<SPI, W> {
+    fn new(spi: SPI, config: impl Into<Config>, rec: SPI::Rec) -> Self {
+        let config: Config = config.into();
+        rec.enable();
+
+        let spi = SpiSlave {
+            inner: Inner::new(spi),
+            use_ssi: !config.hardware_cs.enabled(),
+            _word: PhantomData,
+        };
+        spi.init(config)
+    }
+
+    fn spi(&mut self) -> &mut SPI {
+        &mut self.inner.spi
+    }
+
+    fn init(mut self, config: Config) -> Self {
+        if config.hardware_cs.enabled() {
+            // assert!(
+            //     matches!(
+            //         config.hardware_cs.mode,
+            //         HardwareCSMode::SlaveSelectInput
+            //     ),
+            //     "Slave mode can only use hardware chip select as input"
+            // );
+        }
+
+        self.inner.set_word_size(W::BITS as usize);
+
+        // Deselect internal slave select
+        self.spi().cr1().write(|w| w.ssi().slave_not_selected());
+
+        let cs_polarity = match config.hardware_cs.polarity {
+            Polarity::IdleHigh => SSIOP::ActiveLow,
+            Polarity::IdleLow => SSIOP::ActiveHigh,
+        };
+
+        let endianness = match config.endianness {
+            Endianness::LsbFirst => LSBFRST::Lsbfirst,
+            Endianness::MsbFirst => LSBFRST::Msbfirst,
+        };
+
+        self.spi().cfg2().write(|w| {
+            w.cpha()
+                .bit(config.mode.phase == Phase::CaptureOnSecondTransition)
+                .cpol()
+                .bit(config.mode.polarity == Polarity::IdleHigh)
+                .master()
+                .slave()
+                .lsbfrst()
+                .variant(endianness)
+                .ssm()
+                .bit(!config.hardware_cs.enabled())
+                .ssoe()
+                .disabled()
+                .ssiop()
+                .variant(cs_polarity)
+                .ioswp()
+                .bit(config.swap_miso_mosi)
+                .comm()
+                .variant(config.communication_mode.into())
         });
 
         self
@@ -999,6 +1189,204 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
 
     /// Full duplex transfer with single buffer for transmit and receive
     fn transfer_inplace(&mut self, words: &mut [W]) -> Result<(), Error> {
+        if words.is_empty() {
+            return Ok(());
+        }
+
+        let transaction = self.start_transfer_inplace(words)?;
+        self.transfer_internal(transaction)
+    }
+}
+
+impl<SPI: Instance, W: Word> SpiSlave<SPI, W> {
+    /// Set the word size for a transaction. Can only be changed when the peripheral is disabled
+    /// Must be less than or equal to the maximum size denoted by the const generic size parameter
+    /// (W)
+    pub fn set_word_size(&mut self, word_size: usize) {
+        self.inner.set_word_size(word_size);
+    }
+
+    /// Start listening for transactions from a master
+    fn start_listening(&mut self) {
+        if self.use_ssi {
+            self.spi().cr1().modify(|_, w| w.ssi().slave_selected());
+        }
+        self.inner.enable();
+    }
+
+    /// Stop listening for transactions from a master. Abort any ongoing transaction.
+    fn stop_listening(&mut self) {
+        self.inner.disable();
+        if self.use_ssi {
+            self.spi().cr1().modify(|_, w| w.ssi().slave_not_selected());
+        }
+    }
+
+    /// This will return nb::Error::WouldBlock until all remaining bytes have been sent or received.
+    /// Upon completion of the transaction, it will disable the SPI peripheral and stop listening
+    /// for data.
+    fn end_transaction_if_done(&mut self) -> bool {
+        if self.inner.is_transmitter()
+            && self.spi().sr().read().txc().is_ongoing()
+        {
+            return false;
+        }
+
+        self.stop_listening();
+
+        true
+    }
+
+    /// Deconstructs the SPI peripheral and returns the component parts.
+    pub fn free(self) -> SPI {
+        self.inner.spi
+    }
+
+    pub fn inner(&self) -> &SPI {
+        &self.inner.spi
+    }
+
+    pub fn inner_mut(&mut self) -> &mut SPI {
+        &mut self.inner.spi
+    }
+}
+
+// Non-blocking SPI Slave operations
+impl<SPI: Instance, W: Word> SpiSlave<SPI, W> {
+    fn start_write<'a>(
+        &mut self,
+        words: &'a [W],
+    ) -> Result<Transaction<Write<'a, W>, W>, Error> {
+        assert!(
+            !words.is_empty(),
+            "Write buffer should not be non-zero length"
+        );
+
+        let communication_mode = self.inner.communication_mode();
+        if communication_mode == CommunicationMode::SimplexReceiver {
+            return Err(Error::InvalidOperation);
+        }
+
+        if communication_mode == CommunicationMode::HalfDuplex {
+            self.inner.set_dir_transmitter();
+        }
+
+        self.start_listening();
+
+        Ok(Transaction::<Write<'a, W>, W>::write(words))
+    }
+
+    fn start_read<'a>(
+        &mut self,
+        buf: &'a mut [W],
+    ) -> Result<Transaction<Read<'a, W>, W>, Error> {
+        let communication_mode = self.inner.communication_mode();
+        if communication_mode == CommunicationMode::SimplexTransmitter {
+            return Err(Error::InvalidOperation);
+        }
+
+        if communication_mode == CommunicationMode::HalfDuplex {
+            self.inner.set_dir_receiver();
+        }
+
+        self.start_listening();
+
+        Ok(Transaction::<Read<'a, W>, W>::read(buf))
+    }
+
+    fn start_transfer<'a>(
+        &mut self,
+        read: &'a mut [W],
+        write: &'a [W],
+    ) -> Result<Transaction<Transfer<'a, W>, W>, Error> {
+        if self.inner.communication_mode() != CommunicationMode::FullDuplex {
+            return Err(Error::InvalidOperation);
+        }
+
+        self.start_listening();
+
+        Ok(Transaction::<Transfer<'a, W>, W>::transfer(write, read))
+    }
+
+    fn start_transfer_inplace<'a>(
+        &mut self,
+        words: &'a mut [W],
+    ) -> Result<Transaction<TransferInplace<'a, W>, W>, Error> {
+        if self.inner.communication_mode() != CommunicationMode::FullDuplex {
+            return Err(Error::InvalidOperation);
+        }
+
+        self.start_listening();
+
+        Ok(Transaction::<TransferInplace<'a, W>, W>::transfer_inplace(
+            words,
+        ))
+    }
+
+    fn transfer_nonblocking_internal<OP: Op<W>>(
+        &mut self,
+        mut transaction: Transaction<OP, W>,
+    ) -> Result<Option<Transaction<OP, W>>, Error> {
+        self.inner
+            .transfer_words_nonblocking(&mut transaction)
+            .inspect_err(|_| self.stop_listening())?;
+
+        if transaction.is_complete() && self.end_transaction_if_done() {
+            Ok(None)
+        } else {
+            Ok(Some(transaction))
+        }
+    }
+}
+
+// Blocking SPI Slave operations
+impl<SPI: Instance, W: Word> SpiSlave<SPI, W> {
+    fn transfer_internal<OP: Op<W>>(
+        &mut self,
+        mut transaction: Transaction<OP, W>,
+    ) -> Result<(), Error> {
+        while let Some(t) = self.transfer_nonblocking_internal(transaction)? {
+            transaction = t;
+        }
+        Ok(())
+    }
+
+    /// Blocking, write-only transfer
+    pub fn write(&mut self, words: &[W]) -> Result<(), Error> {
+        if words.is_empty() {
+            return Ok(());
+        }
+
+        let transaction = self.start_write(words)?;
+        self.transfer_internal(transaction)
+    }
+
+    /// Blocking read-only transfer
+    pub fn read(&mut self, words: &mut [W]) -> Result<(), Error> {
+        if words.is_empty() {
+            return Ok(());
+        }
+
+        let transaction = self.start_read(words)?;
+        self.transfer_internal(transaction)
+    }
+
+    /// Blocking full duplex transfer
+    pub fn transfer(
+        &mut self,
+        read: &mut [W],
+        write: &[W],
+    ) -> Result<(), Error> {
+        if read.is_empty() && write.is_empty() {
+            return Ok(());
+        }
+
+        let transaction = self.start_transfer(read, write)?;
+        self.transfer_internal(transaction)
+    }
+
+    /// Blocking full duplex transfer with single buffer for transmit and receive
+    pub fn transfer_inplace(&mut self, words: &mut [W]) -> Result<(), Error> {
         if words.is_empty() {
             return Ok(());
         }

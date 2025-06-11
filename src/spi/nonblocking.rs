@@ -1,6 +1,6 @@
 use super::{
-    Error, Instance, Op, Read, Spi, Transaction, Transfer, TransferInplace,
-    Word, Write,
+    Error, Instance, Op, Read, Spi, SpiSlave, Transaction, Transfer,
+    TransferInplace, Word, Write,
 };
 
 /// Trait that provides non-blocking SPI operations.
@@ -49,6 +49,45 @@ pub trait NonBlocking<W: Word> {
 }
 
 impl<SPI: Instance, W: Word> NonBlocking<W> for Spi<SPI, W> {
+    fn start_nonblocking_read<'a>(
+        &mut self,
+        buf: &'a mut [W],
+    ) -> Result<Transaction<Read<'a, W>, W>, Error> {
+        self.start_read(buf)
+    }
+
+    fn start_nonblocking_write<'a>(
+        &mut self,
+        words: &'a [W],
+    ) -> Result<Transaction<Write<'a, W>, W>, Error> {
+        self.start_write(words)
+    }
+
+    fn start_nonblocking_duplex_transfer<'a>(
+        &mut self,
+        read: &'a mut [W],
+        write: &'a [W],
+    ) -> Result<Transaction<Transfer<'a, W>, W>, Error> {
+        self.start_transfer(read, write)
+    }
+
+    fn start_nonblocking_duplex_transfer_inplace<'a>(
+        &mut self,
+        words: &'a mut [W],
+    ) -> Result<Transaction<TransferInplace<'a, W>, W>, Error> {
+        self.start_transfer_inplace(words)
+    }
+
+    #[allow(private_bounds)]
+    fn transfer_nonblocking<OP: Op<W>>(
+        &mut self,
+        transaction: Transaction<OP, W>,
+    ) -> Result<Option<Transaction<OP, W>>, Error> {
+        self.transfer_nonblocking_internal(transaction)
+    }
+}
+
+impl<SPI: Instance, W: Word> NonBlocking<W> for SpiSlave<SPI, W> {
     fn start_nonblocking_read<'a>(
         &mut self,
         buf: &'a mut [W],
