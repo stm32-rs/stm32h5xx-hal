@@ -113,6 +113,10 @@ opt-level = "s" # optimize for binary size
 name = "blinky"
 
 [[example]]
+name = "blinky_timer"
+required-features = ["stm32h533"]
+
+[[example]]
 name = "i2c"
 required-features = ["stm32h503"]
 
