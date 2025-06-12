@@ -690,7 +690,7 @@ impl<I2C: Instance, A, R> I2cTarget<I2C, A, R> {
     fn new(
         i2c: I2C,
         target_config: impl Into<TargetConfig>,
-        rec: <I2C as Instance>::Rec,
+        rec: I2C::Rec,
         clocks: &CoreClocks,
     ) -> Self {
         let config = target_config.into();
