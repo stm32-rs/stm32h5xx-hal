@@ -233,7 +233,10 @@ impl<'a, OP, W> Transaction<OP, W> {
 impl<OP: Op<W>, W> Transaction<OP, W> {
     #[inline(always)]
     pub(super) fn is_complete(&mut self) -> bool {
-        self.is_read_complete() && self.is_write_complete()
+        self.is_read_complete()
+            && self.rx_remainder_to_discard() == 0
+            && self.is_write_complete()
+            && self.tx_flush_remainder() == 0
     }
 
     #[inline(always)]

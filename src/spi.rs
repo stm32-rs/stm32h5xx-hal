@@ -505,6 +505,15 @@ impl<SPI: Instance, W: Word> Inner<SPI, W> {
         }
     }
 
+    fn is_receiver(&self) -> bool {
+        match self.communication_mode() {
+            CommunicationMode::FullDuplex => true,
+            CommunicationMode::HalfDuplex => !self.is_half_duplex_transmitter(),
+            CommunicationMode::SimplexTransmitter => false,
+            CommunicationMode::SimplexReceiver => true,
+        }
+    }
+
     /// Set SPI to transmit mode in half duplex operation
     /// Only valid in half duplex operation. This is provided for non-blocking calls to be able to
     /// change direction of communication. Blocking calls already handle this
@@ -615,6 +624,11 @@ impl<SPI: Instance, W: Word> Inner<SPI, W> {
     /// occurs.
     #[inline(always)]
     fn flush_tx_fifo(&mut self, len: usize) -> Result<usize, Error> {
+        // If the device is not a transmitter, no bytes can be written/flushed, so just return
+        // immediately.
+        if !self.is_transmitter() {
+            return Ok(len);
+        }
         for i in 0..len {
             if !self.write_if_ready(W::default())? {
                 return Ok(i);
@@ -641,6 +655,11 @@ impl<SPI: Instance, W: Word> Inner<SPI, W> {
     /// occurs.
     #[inline(always)]
     fn discard_rx_fifo(&mut self, len: usize) -> Result<usize, Error> {
+        // If the device is not a receiver, no bytes will be received or available to read/discard,
+        // so just return immediately.
+        if !self.is_receiver() {
+            return Ok(len);
+        }
         for i in 0..len {
             let mut dummy = W::default();
             if !self.read_if_ready(&mut dummy)? {
