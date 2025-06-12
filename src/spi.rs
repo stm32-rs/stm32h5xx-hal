@@ -426,7 +426,9 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
         };
 
         self.spi().cfg2().write(|w| {
-            w.cpha()
+            w.afcntr()
+                .controlled()
+                .cpha()
                 .bit(config.mode.phase == Phase::CaptureOnSecondTransition)
                 .cpol()
                 .bit(config.mode.polarity == Polarity::IdleHigh)
@@ -925,7 +927,7 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
     ) -> Result<Transaction<Transfer<'a, W>, W>, Error> {
         assert!(
             !read.is_empty() && !write.is_empty(),
-            "Transfer buffers should not be non-zero length"
+            "Transfer buffers should not be of zero length"
         );
         if self.inner.communication_mode() != CommunicationMode::FullDuplex {
             return Err(Error::InvalidOperation);
@@ -942,7 +944,7 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
     ) -> Result<Transaction<TransferInplace<'a, W>, W>, Error> {
         assert!(
             !words.is_empty(),
-            "Transfer buffer should not be non-zero length"
+            "Transfer buffer should not be of zero length"
         );
         if self.inner.communication_mode() != CommunicationMode::FullDuplex {
             return Err(Error::InvalidOperation);

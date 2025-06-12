@@ -131,7 +131,7 @@ impl Config {
         self
     }
 
-    // /// Select endianness is used for data transfers
+    /// Select endianness used for data transfers
     pub fn endianness(mut self, endianness: Endianness) -> Self {
         self.endianness = endianness;
         self
