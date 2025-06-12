@@ -341,7 +341,7 @@ mod rm0481_common {
                 NoMosi,
                 #[cfg(feature = "h523_h533")]
                 gpio::PA8<Alternate<6>>,
-                #[cfg(feature = "stm32h523")]
+                #[cfg(feature = "h523_h533")]
                 gpio::PC1<Alternate<6>>,
                 gpio::PE6<Alternate<5>>,
                 gpio::PE14<Alternate<5>>
