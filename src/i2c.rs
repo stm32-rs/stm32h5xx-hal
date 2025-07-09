@@ -213,14 +213,17 @@ pub enum Error {
     Arbitration,
     /// NACK received
     NotAcknowledge,
-    /// Target operation only:
+    /// Target error occurred. Can be ignored during controller operation.
+    TargetError(TargetError),
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum TargetError {
     /// Indicates that a stop or repeat start was received while reading, or
     /// while explicitly waiting for a controller read or write event.
     TransferStopped,
-    /// Target operation only:
     /// While waiting for a controller read event, a write event was received.
     ControllerExpectedWrite,
-    /// Target operation only:
     /// While waiting for a controller write event, a read event was received.
     ControllerExpectedRead,
 }
@@ -817,7 +820,7 @@ impl<I2C: Instance> Inner<I2C> {
         } else if isr.stopf().is_stop() || isr.addr().is_match() {
             // This is only relevant to Target operation, when the controller stops the read
             // operation with a Stop or Restart condition.
-            Err(Error::TransferStopped)
+            Err(Error::TargetError(TargetError::TransferStopped))
         } else {
             Ok(false)
         }
@@ -1127,7 +1130,7 @@ impl<I2C: Instance, A, R> I2cTarget<I2C, A, R> {
                 Ok(data) => {
                     *byte = data;
                 }
-                Err(Error::TransferStopped) => return Ok(i),
+                Err(Error::TargetError(TargetError::TransferStopped)) => return Ok(i),
                 Err(error) => return Err(error),
             };
         }
@@ -1460,10 +1463,10 @@ where
     ) -> Result<usize, Error> {
         match self.wait_for_event()? {
             TargetEvent::Read { address: _ } => {
-                Err(Error::ControllerExpectedWrite)
+                Err(Error::TargetError(TargetError::ControllerExpectedWrite))
             }
             TargetEvent::Write { address: _ } => self.read(buffer),
-            TargetEvent::Stop => Err(Error::TransferStopped),
+            TargetEvent::Stop => Err(Error::TargetError(TargetError::TransferStopped)),
         }
     }
 
@@ -1483,9 +1486,9 @@ where
         match self.wait_for_event()? {
             TargetEvent::Read { address: _ } => self.write(bytes),
             TargetEvent::Write { address: _ } => {
-                Err(Error::ControllerExpectedRead)
+                Err(Error::TargetError(TargetError::ControllerExpectedRead))
             }
-            TargetEvent::Stop => Err(Error::TransferStopped),
+            TargetEvent::Stop => Err(Error::TargetError(TargetError::TransferStopped)),
         }
     }
 
@@ -1496,10 +1499,10 @@ where
     pub fn wait_for_stop(&mut self) -> Result<(), Error> {
         match self.wait_for_event()? {
             TargetEvent::Read { address: _ } => {
-                Err(Error::ControllerExpectedWrite)
+                Err(Error::TargetError(TargetError::ControllerExpectedWrite))
             }
             TargetEvent::Write { address: _ } => {
-                Err(Error::ControllerExpectedRead)
+                Err(Error::TargetError(TargetError::ControllerExpectedRead))
             }
             TargetEvent::Stop => Ok(()),
         }
