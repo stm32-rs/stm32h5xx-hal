@@ -94,8 +94,7 @@ impl Display for ResetReason {
             }
             ResetReason::Unknown { rcc_rsr } => write!(
                 f,
-                "Could not determine the cause. RCC RSR bits were 0x{:X}",
-                rcc_rsr
+                "Could not determine the cause. RCC RSR bits were 0x{rcc_rsr:X}",
             ),
         }
     }
