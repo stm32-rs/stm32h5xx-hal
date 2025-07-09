@@ -218,6 +218,7 @@ pub enum Error {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TargetError {
     /// Indicates that a stop or repeat start was received while reading, or
     /// while explicitly waiting for a controller read or write event.
