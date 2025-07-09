@@ -57,10 +57,11 @@
 //! let dp = ...;            // Device peripherals
 //! let (scl, sda) = ...;    // GPIO pins
 //! let own_addr = ...;      // Primary address for target operation
+//! let bus_freq = ...;      // Bus frequency for target operation
 //!
 //! let mut i2c_target = dp.I2C1.i2c_target_only(
 //!     (scl, sda),
-//!     own_addr,
+//!     TargetConfig::new(own_addr, bus_freq),
 //!     ccdr.peripheral.I2C1,
 //! );
 //! ```
@@ -120,10 +121,11 @@
 //! let dp = ...;            // Device peripherals
 //! let (scl, sda) = ...;    // GPIO pins
 //! let own_addr = ...;      // Primary address for target operation
+//! let bus_freq = ...;      // Bus frequency for target operation
 //!
 //! let mut i2c = dp.I2C1.i2c_controller_target(
 //!     (scl, sda),
-//!     own_addr,
+//!     TargetConfig::new(own_addr, bus_freq),
 //!     ccdr.peripheral.I2C1,
 //! );
 //! ```
@@ -381,7 +383,7 @@ pub trait I2cExt<I2C: Instance>: Sized {
     fn i2c_target_only<P: Pins<I2C>>(
         self,
         _pins: P,
-        target_config: impl Into<TargetConfig>,
+        target_config: TargetConfig,
         rec: I2C::Rec,
         clocks: &CoreClocks,
     ) -> I2cTarget<I2C, AutoAck, SingleRole>;
@@ -390,7 +392,7 @@ pub trait I2cExt<I2C: Instance>: Sized {
     /// This will not check that the pins are properly configured.
     fn i2c_target_only_unchecked<P: Pins<I2C>>(
         self,
-        target_config: impl Into<TargetConfig>,
+        target_config: TargetConfig,
         rec: I2C::Rec,
         clocks: &CoreClocks,
     ) -> I2cTarget<I2C, AutoAck, SingleRole>;
@@ -441,7 +443,7 @@ impl<I2C: Instance> I2cExt<I2C> for I2C {
     fn i2c_target_only<P: Pins<I2C>>(
         self,
         _pins: P,
-        config: impl Into<TargetConfig>,
+        config: TargetConfig,
         rec: I2C::Rec,
         clocks: &CoreClocks,
     ) -> I2cTarget<I2C, AutoAck, SingleRole> {
@@ -450,7 +452,7 @@ impl<I2C: Instance> I2cExt<I2C> for I2C {
 
     fn i2c_target_only_unchecked<P: Pins<I2C>>(
         self,
-        target_config: impl Into<TargetConfig>,
+        target_config: TargetConfig,
         rec: I2C::Rec,
         clocks: &CoreClocks,
     ) -> I2cTarget<I2C, AutoAck, SingleRole> {
@@ -633,7 +635,7 @@ impl<I2C: Instance, R> I2c<I2C, R> {
     pub fn new(
         i2c: I2C,
         frequency: Hertz,
-        config: Option<impl Into<TargetConfig>>,
+        config: Option<TargetConfig>,
         rec: I2C::Rec,
         clocks: &CoreClocks,
     ) -> Self {
@@ -666,7 +668,6 @@ impl<I2C: Instance, R> I2c<I2C, R> {
         });
 
         if let Some(config) = config {
-            let config = config.into();
             configure_target_addresses(&i2c, config);
         }
 
@@ -689,12 +690,10 @@ impl<I2C: Instance, R> I2c<I2C, R> {
 impl<I2C: Instance, A, R> I2cTarget<I2C, A, R> {
     fn new(
         i2c: I2C,
-        target_config: impl Into<TargetConfig>,
+        config: TargetConfig,
         rec: I2C::Rec,
         clocks: &CoreClocks,
     ) -> Self {
-        let config = target_config.into();
-
         let _ = rec.enable().reset();
 
         // Clear PE bit in I2C_CR1
@@ -1163,7 +1162,7 @@ impl<I2C: Instance, A, R> I2cTarget<I2C, A, R> {
                     // If we receive a NACK it will be on the FIFO write subsequent to the last byte
                     // actually written to the bus. If we start writing zeroes out, we only want to
                     // indicate how many bytes from the buffer we wrote.
-                    return Ok(core::cmp::min(i - 1, bytes.len()));
+                    return Ok(core::cmp::min(i.saturating_sub(1), bytes.len()));
                 }
                 Err(error) => return Err(error),
             }
@@ -1437,8 +1436,8 @@ where
     /// full, or until the transfer is stopped by the controller, whichever
     /// comes first.
     ///
-    /// If the a bus error occurs or a stop condition is received, an error
-    /// will be returned, otherwise the number of bytes received wrapped in an
+    /// If a bus error occurs or a stop condition is received, an error will
+    /// be returned, otherwise the number of bytes received wrapped in an
     /// Ok result will be returned
     ///
     /// ## Auto ACK'ing mode
@@ -1548,7 +1547,7 @@ pub trait Targetable {
     /// Configure target after initialization: allows the target addresses to be
     /// dynamically configured. This will disable any target events previously
     /// enabled.
-    fn configure_target(&mut self, config: impl Into<TargetConfig>);
+    fn configure_target(&mut self, config: TargetConfig);
 }
 
 impl<I2C: Instance> Targetable for I2c<I2C, SwitchRole> {
@@ -1560,8 +1559,8 @@ impl<I2C: Instance> Targetable for I2c<I2C, SwitchRole> {
         self.inner.disable_target_event(event)
     }
 
-    fn configure_target(&mut self, config: impl Into<TargetConfig>) {
-        configure_target_addresses(&self.i2c, config.into())
+    fn configure_target(&mut self, config: TargetConfig) {
+        configure_target_addresses(&self.i2c, config)
     }
 }
 
@@ -1574,8 +1573,8 @@ impl<I2C: Instance, R> Targetable for I2cTarget<I2C, R> {
         self.inner.disable_target_event(event)
     }
 
-    fn configure_target(&mut self, config: impl Into<TargetConfig>) {
-        configure_target_addresses(&self.i2c, config.into())
+    fn configure_target(&mut self, config: TargetConfig) {
+        configure_target_addresses(&self.i2c, config)
     }
 }
 
