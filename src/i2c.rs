@@ -1131,7 +1131,9 @@ impl<I2C: Instance, A, R> I2cTarget<I2C, A, R> {
                 Ok(data) => {
                     *byte = data;
                 }
-                Err(Error::TargetError(TargetError::TransferStopped)) => return Ok(i),
+                Err(Error::TargetError(TargetError::TransferStopped)) => {
+                    return Ok(i)
+                }
                 Err(error) => return Err(error),
             };
         }
@@ -1166,7 +1168,10 @@ impl<I2C: Instance, A, R> I2cTarget<I2C, A, R> {
                     // If we receive a NACK it will be on the FIFO write subsequent to the last byte
                     // actually written to the bus. If we start writing zeroes out, we only want to
                     // indicate how many bytes from the buffer we wrote.
-                    return Ok(core::cmp::min(i.saturating_sub(1), bytes.len()));
+                    return Ok(core::cmp::min(
+                        i.saturating_sub(1),
+                        bytes.len(),
+                    ));
                 }
                 Err(error) => return Err(error),
             }
@@ -1467,7 +1472,9 @@ where
                 Err(Error::TargetError(TargetError::ControllerExpectedWrite))
             }
             TargetEvent::Write { address: _ } => self.read(buffer),
-            TargetEvent::Stop => Err(Error::TargetError(TargetError::TransferStopped)),
+            TargetEvent::Stop => {
+                Err(Error::TargetError(TargetError::TransferStopped))
+            }
         }
     }
 
@@ -1489,7 +1496,9 @@ where
             TargetEvent::Write { address: _ } => {
                 Err(Error::TargetError(TargetError::ControllerExpectedRead))
             }
-            TargetEvent::Stop => Err(Error::TargetError(TargetError::TransferStopped)),
+            TargetEvent::Stop => {
+                Err(Error::TargetError(TargetError::TransferStopped))
+            }
         }
     }
 
