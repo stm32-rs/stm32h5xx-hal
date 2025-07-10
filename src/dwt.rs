@@ -102,7 +102,7 @@ impl Delay {
 
 impl embedded_hal::delay::DelayNs for Delay {
     fn delay_ns(&mut self, ns: u32) {
-        // Convert us to ticks
+        // Convert ns to ticks
         let start = DWT::cycle_count();
         let ticks = (ns as u64 * self.clock.raw() as u64) / 1_000_000_000;
         Delay::delay_ticks(start, ticks);
