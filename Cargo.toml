@@ -92,3 +92,11 @@ name = "blinky"
 [[example]]
 name = "i2c"
 required-features = ["stm32h503"]
+
+[[example]]
+name = "i2c_target"
+required-features = ["stm32h503"]
+
+[[example]]
+name = "i2c_target_manual_ack"
+required-features = ["stm32h503"]

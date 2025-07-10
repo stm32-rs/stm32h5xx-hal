@@ -11,11 +11,12 @@ impl i2c::Error for Error {
             Error::NotAcknowledge => {
                 i2c::ErrorKind::NoAcknowledge(i2c::NoAcknowledgeSource::Unknown)
             }
+            _ => i2c::ErrorKind::Other,
         }
     }
 }
 
-impl<I2C> i2c::ErrorType for I2c<I2C> {
+impl<I2C, R> i2c::ErrorType for I2c<I2C, R> {
     type Error = Error;
 }
 
@@ -40,7 +41,7 @@ impl OperationExt for i2c::Operation<'_> {
     }
 }
 
-impl<I2C: Instance> I2c<I2C> {
+impl<I2C: Instance, R> I2c<I2C, R> {
     fn process_operation(
         &mut self,
         stop: Stop,
@@ -123,7 +124,7 @@ impl<I2C: Instance> I2c<I2C> {
     }
 }
 
-impl<I2C: Instance> i2c::I2c<i2c::SevenBitAddress> for I2c<I2C> {
+impl<I2C: Instance, R> i2c::I2c<i2c::SevenBitAddress> for I2c<I2C, R> {
     fn transaction(
         &mut self,
         address: i2c::SevenBitAddress,
@@ -138,7 +139,7 @@ impl<I2C: Instance> i2c::I2c<i2c::SevenBitAddress> for I2c<I2C> {
     }
 }
 
-impl<I2C: Instance> i2c::I2c<i2c::TenBitAddress> for I2c<I2C> {
+impl<I2C: Instance, R> i2c::I2c<i2c::TenBitAddress> for I2c<I2C, R> {
     fn transaction(
         &mut self,
         address: i2c::TenBitAddress,

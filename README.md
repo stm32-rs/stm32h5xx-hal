@@ -36,7 +36,7 @@ of support for peripherals is shown in the table below.
 |------------|----|---|---|
 | GPIO       | ✅ | - | |
 | ICache     | ✅ | - | |
-| I2C        | ✅ | - | Controller operation is done; Target is 🚧 |
+| I2C        | ✅ | - | |
 | CAN        | 🚧 | - | |
 | Rng        | 🚧 | [#34](https://github.com/stm32-rs/stm32h5xx-hal/issues/34)| |
 | SPI        | 🚧 | [#36](https://github.com/stm32-rs/stm32h5xx-hal/issues/36) | |
