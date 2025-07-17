@@ -1,13 +1,13 @@
-use core::{marker::PhantomData, num::NonZeroUsize};
+use core::marker::PhantomData;
 
 use embedded_dma::{ReadBuffer, WriteBuffer};
 
 use crate::gpdma::{
     config::{Config as DmaConfig, MemoryToPeripheral, PeripheralToMemory},
-    Channel, Transfer as DmaTransfer, Word,
+    Channel, ChannelRegs, Transfer as DmaTransfer, Word as DmaWord,
 };
 
-use super::{Error, FrameSize, Instance, Spi};
+use super::{Error, Instance, Spi, Word};
 
 pub struct DmaRx<SPI, W> {
     _spi: PhantomData<SPI>,
@@ -23,7 +23,7 @@ impl<SPI, W> DmaRx<SPI, W> {
     }
 }
 
-unsafe impl<SPI: Instance, W: FrameSize> ReadBuffer for DmaRx<SPI, W> {
+unsafe impl<SPI: Instance, W: Word> ReadBuffer for DmaRx<SPI, W> {
     type Word = W;
 
     unsafe fn read_buffer(&self) -> (*const Self::Word, usize) {
@@ -45,7 +45,7 @@ impl<SPI, W> DmaTx<SPI, W> {
     }
 }
 
-unsafe impl<SPI: Instance, W: FrameSize> WriteBuffer for DmaTx<SPI, W> {
+unsafe impl<SPI: Instance, W: Word> WriteBuffer for DmaTx<SPI, W> {
     type Word = W;
 
     unsafe fn write_buffer(&mut self) -> (*mut Self::Word, usize) {
@@ -53,7 +53,7 @@ unsafe impl<SPI: Instance, W: FrameSize> WriteBuffer for DmaTx<SPI, W> {
     }
 }
 
-pub struct RxDmaTransfer<'a, SPI, W: FrameSize, CH, D> {
+pub struct RxDmaTransfer<'a, SPI, W: Word, CH, D> {
     spi: &'a mut Spi<SPI, W>,
     transfer: DmaTransfer<CH, DmaRx<SPI, W>, D, PeripheralToMemory>,
 }
@@ -61,11 +61,16 @@ pub struct RxDmaTransfer<'a, SPI, W: FrameSize, CH, D> {
 impl<'a, SPI, W, CH, D> RxDmaTransfer<'a, SPI, W, CH, D>
 where
     SPI: Instance,
-    W: FrameSize + Word,
-    CH: Channel,
+    W: Word + DmaWord,
+    CH: ChannelRegs,
     D: WriteBuffer<Word = W>,
 {
-    pub fn new(spi: &'a mut Spi<SPI, W>, channel: CH, destination: D) -> Self {
+    pub fn new(
+        spi: &'a mut Spi<SPI, W>,
+        channel: Channel<CH>,
+        mut destination: D,
+    ) -> Self {
+        let (_, len) = unsafe { destination.write_buffer() };
         let config = DmaConfig::new().with_request(SPI::rx_dma_request());
         let source = DmaRx::new();
         let transfer = DmaTransfer::peripheral_to_memory(
@@ -74,15 +79,17 @@ where
             source,
             destination,
         );
+        spi.inner.set_transfer_word_count(len as u16);
         Self { spi, transfer }
     }
 
-    pub fn start(&mut self) -> Result<(), crate::gpdma::Error> {
-        self.spi.enable_rx_dma();
+    pub fn start(&mut self) -> Result<(), Error> {
+        self.spi.setup_read_mode()?;
+        self.spi.inner.enable_rx_dma();
         self.transfer.start_with(|_, _| {
-            self.spi.enable();
-            self.spi.start_transfer();
-        })
+            self.spi.start_transaction();
+        })?;
+        Ok(())
     }
 
     pub fn is_dma_complete(&self) -> Result<bool, Error> {
@@ -93,16 +100,16 @@ where
 
     pub fn end_transfer(&mut self) {
         self.spi.end_transaction();
-        self.spi.disable_dma();
+        self.spi.inner.disable_dma();
     }
 
-    pub fn free(self) -> Result<(CH, D), Error> {
+    pub fn free(self) -> Result<(Channel<CH>, D), Error> {
         let (ch, _, d) = self.transfer.free()?;
         Ok((ch, d))
     }
 }
 
-pub struct TxDmaTransfer<'a, SPI, W: FrameSize, CH, S> {
+pub struct TxDmaTransfer<'a, SPI, W: Word, CH, S> {
     spi: &'a mut Spi<SPI, W>,
     transfer: DmaTransfer<CH, S, DmaTx<SPI, W>, MemoryToPeripheral>,
 }
@@ -110,11 +117,16 @@ pub struct TxDmaTransfer<'a, SPI, W: FrameSize, CH, S> {
 impl<'a, SPI, W, CH, S> TxDmaTransfer<'a, SPI, W, CH, S>
 where
     SPI: Instance,
-    W: FrameSize + Word,
-    CH: Channel,
+    W: DmaWord + Word,
+    CH: ChannelRegs,
     S: ReadBuffer<Word = W>,
 {
-    pub fn new(spi: &'a mut Spi<SPI, W>, channel: CH, source: S) -> Self {
+    pub fn new(
+        spi: &'a mut Spi<SPI, W>,
+        channel: Channel<CH>,
+        source: S,
+    ) -> Self {
+        let (_, len) = unsafe { source.read_buffer() };
         let config = DmaConfig::new().with_request(SPI::tx_dma_request());
         let destination = DmaTx::new();
         let transfer = DmaTransfer::memory_to_peripheral(
@@ -123,15 +135,17 @@ where
             source,
             destination,
         );
+        spi.inner.set_transfer_word_count(len as u16);
         Self { spi, transfer }
     }
 
-    pub fn start(&mut self) -> Result<(), crate::gpdma::Error> {
+    pub fn start(&mut self) -> Result<(), Error> {
+        self.spi.setup_write_mode()?;
         self.transfer.start_with(|_, _| {
-            self.spi.enable_tx_dma();
-            self.spi.enable();
-            self.spi.start_transfer();
-        })
+            self.spi.inner.enable_tx_dma();
+            self.spi.start_transaction();
+        })?;
+        Ok(())
     }
 
     pub fn is_dma_complete(&self) -> Result<bool, Error> {
@@ -142,35 +156,34 @@ where
 
     pub fn end_transfer(&mut self) {
         self.spi.end_transaction();
-        self.spi.disable_dma();
+        self.spi.inner.disable_dma();
     }
 
-    pub fn free(self) -> Result<(CH, S), Error> {
+    pub fn free(self) -> Result<(Channel<CH>, S), Error> {
         let (ch, s, _) = self.transfer.free()?;
         Ok((ch, s))
     }
 }
 
-pub struct DuplexDmaTransfer<'a, SPI, W: FrameSize, TX, RX, S, D> {
+pub struct DuplexDmaTransfer<'a, SPI, W: Word, TX, RX, S, D> {
     spi: &'a mut Spi<SPI, W>,
     tx_transfer: DmaTransfer<TX, S, DmaTx<SPI, W>, MemoryToPeripheral>,
     rx_transfer: DmaTransfer<RX, DmaRx<SPI, W>, D, PeripheralToMemory>,
-    len: usize,
 }
 
 impl<'a, SPI, W, RX, TX, S, D> DuplexDmaTransfer<'a, SPI, W, TX, RX, S, D>
 where
     SPI: Instance,
-    W: FrameSize + Word,
-    TX: Channel,
-    RX: Channel,
+    W: Word + DmaWord,
+    TX: ChannelRegs,
+    RX: ChannelRegs,
     S: ReadBuffer<Word = W>,
     D: WriteBuffer<Word = W>,
 {
     pub fn new(
         spi: &'a mut Spi<SPI, W>,
-        tx_channel: TX,
-        rx_channel: RX,
+        tx_channel: Channel<TX>,
+        rx_channel: Channel<RX>,
         source: S,
         mut destination: D,
     ) -> Self {
@@ -192,11 +205,11 @@ where
             rx_source,
             destination,
         );
+        spi.inner.set_transfer_word_count(dest_len as u16);
         Self {
             spi,
             tx_transfer,
             rx_transfer,
-            len: dest_len,
         }
     }
 
@@ -209,12 +222,12 @@ where
     }
 
     pub fn start(&mut self) -> Result<(), Error> {
-        self.spi.enable_rx_dma();
-        self.rx_transfer.start_nb();
-        self.tx_transfer.start_nb();
-        self.spi.enable_tx_dma();
-        self.spi
-            .setup_transaction(NonZeroUsize::new(self.len).unwrap())?;
+        self.spi.check_transfer_mode()?;
+        self.spi.inner.enable_rx_dma();
+        self.rx_transfer.start_nonblocking();
+        self.tx_transfer.start_nonblocking();
+        self.spi.inner.enable_tx_dma();
+        self.spi.start_transaction();
         Ok(())
     }
 
@@ -228,13 +241,13 @@ where
         self.tx_transfer.wait_for_transfer_complete()?;
         self.rx_transfer.wait_for_transfer_complete()?;
         self.spi.end_transaction();
-        self.spi.disable_dma();
+        self.spi.inner.disable_dma();
         Ok(())
     }
 
     pub fn end_transfer(&mut self) {
         self.spi.end_transaction();
-        self.spi.disable_dma();
+        self.spi.inner.disable_dma();
     }
 
     pub fn abort(&mut self) -> Result<(), Error> {
@@ -244,7 +257,7 @@ where
         Ok(())
     }
 
-    pub fn free(mut self) -> Result<(TX, RX, S, D), Error> {
+    pub fn free(mut self) -> Result<(Channel<TX>, Channel<RX>, S, D), Error> {
         self.end_transfer();
         let (tx, s, _) = self.tx_transfer.free()?;
         let (rx, _, d) = self.rx_transfer.free()?;

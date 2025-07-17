@@ -838,9 +838,6 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
     }
 
     /// Sets up a frame transaction with the given amount of data words.
-    ///
-    /// If this is called when a transaction has already started,
-    /// then an error is returned with [Error::TransactionAlreadyStarted].
     fn setup_transaction(&mut self, length: usize) {
         assert!(
             length <= u16::MAX as usize,
@@ -848,12 +845,16 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
             u16::MAX
         );
 
-        self.set_transfer_word_count(length.get() as u16);
+        self.inner.set_transfer_word_count(length as u16);
 
+        self.start_transaction();
+    }
+
+    fn start_transaction(&mut self) {
         // Re-enable
         self.inner.clear_modf();
         self.inner.enable();
-        self.spi().cr1().modify(|_, w| w.cstart().started());
+        self.inner.start_transfer();
     }
 
     /// Checks if the current transaction is complete and disables the
@@ -930,14 +931,7 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
         }
     }
 
-    fn start_write<'a>(
-        &mut self,
-        words: &'a [W],
-    ) -> Result<Transaction<Write<'a, W>, W>, Error> {
-        assert!(
-            !words.is_empty(),
-            "Write buffer should not be non-zero length"
-        );
+    fn setup_write_mode(&mut self) -> Result<(), Error> {
         let communication_mode = self.inner.communication_mode();
         if communication_mode == CommunicationMode::SimplexReceiver {
             return Err(Error::InvalidOperation);
@@ -947,16 +941,25 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
             self.inner.set_dir_transmitter();
         }
 
+        Ok(())
+    }
+
+    fn start_write<'a>(
+        &mut self,
+        words: &'a [W],
+    ) -> Result<Transaction<Write<'a, W>, W>, Error> {
+        assert!(
+            !words.is_empty(),
+            "Write buffer should not be non-zero length"
+        );
+
+        self.setup_write_mode()?;
         self.setup_transaction(words.len());
 
         Ok(Transaction::<Write<'a, W>, W>::write(words))
     }
 
-    fn start_read<'a>(
-        &mut self,
-        buf: &'a mut [W],
-    ) -> Result<Transaction<Read<'a, W>, W>, Error> {
-        assert!(!buf.is_empty(), "Read buffer should not be non-zero length");
+    fn setup_read_mode(&self) -> Result<(), Error> {
         let communication_mode = self.inner.communication_mode();
         if communication_mode == CommunicationMode::SimplexTransmitter {
             return Err(Error::InvalidOperation);
@@ -966,9 +969,27 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
             self.inner.set_dir_receiver();
         }
 
+        Ok(())
+    }
+
+    fn start_read<'a>(
+        &mut self,
+        buf: &'a mut [W],
+    ) -> Result<Transaction<Read<'a, W>, W>, Error> {
+        assert!(!buf.is_empty(), "Read buffer should not be non-zero length");
+
+        self.setup_read_mode()?;
         self.setup_transaction(buf.len());
 
         Ok(Transaction::<Read<'a, W>, W>::read(buf))
+    }
+
+    fn check_transfer_mode(&mut self) -> Result<(), Error> {
+        if self.inner.communication_mode() != CommunicationMode::FullDuplex {
+            Err(Error::InvalidOperation)
+        } else {
+            Ok(())
+        }
     }
 
     fn start_transfer<'a>(
@@ -980,10 +1001,8 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
             !read.is_empty() && !write.is_empty(),
             "Transfer buffers should not be of zero length"
         );
-        if self.inner.communication_mode() != CommunicationMode::FullDuplex {
-            return Err(Error::InvalidOperation);
-        }
 
+        self.check_transfer_mode()?;
         self.setup_transaction(core::cmp::max(read.len(), write.len()));
 
         Ok(Transaction::<Transfer<'a, W>, W>::transfer(write, read))
@@ -997,9 +1016,7 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
             !words.is_empty(),
             "Transfer buffer should not be of zero length"
         );
-        if self.inner.communication_mode() != CommunicationMode::FullDuplex {
-            return Err(Error::InvalidOperation);
-        }
+        self.check_transfer_mode()?;
 
         self.setup_transaction(words.len());
 
