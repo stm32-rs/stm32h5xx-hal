@@ -3,8 +3,8 @@ use core::marker::PhantomData;
 use embedded_dma::{ReadBuffer, WriteBuffer};
 
 use crate::gpdma::{
-    config::{Config as DmaConfig, MemoryToPeripheral, PeripheralToMemory},
-    Channel, ChannelRegs, Transfer as DmaTransfer, Word as DmaWord,
+    config::{DmaConfig, MemoryToPeripheral, PeripheralToMemory},
+    Channel, ChannelRegs, DmaTransfer, DmaTransferBuilder, Word as DmaWord,
 };
 
 use super::{Error, Instance, Spi, Word};
@@ -73,7 +73,7 @@ where
         let (_, len) = unsafe { destination.write_buffer() };
         let config = DmaConfig::new().with_request(SPI::rx_dma_request());
         let source = DmaRx::new();
-        let transfer = DmaTransfer::peripheral_to_memory(
+        let transfer = DmaTransferBuilder::peripheral_to_memory(
             config,
             channel,
             source,
@@ -109,27 +109,26 @@ where
     }
 }
 
-pub struct TxDmaTransfer<'a, SPI, W: Word, CH, S> {
+pub struct TxDmaTransfer<'a, SPI, W: Word, CH: ChannelRegs> {
     spi: &'a mut Spi<SPI, W>,
-    transfer: DmaTransfer<CH, S, DmaTx<SPI, W>, MemoryToPeripheral>,
+    transfer: DmaTransfer<'a, CH>,
 }
 
-impl<'a, SPI, W, CH, S> TxDmaTransfer<'a, SPI, W, CH, S>
+impl<'a, SPI, W, CH> TxDmaTransfer<'a, SPI, W, CH>
 where
     SPI: Instance,
     W: DmaWord + Word,
     CH: ChannelRegs,
-    S: ReadBuffer<Word = W>,
 {
-    pub fn new(
+    pub fn new<S: ReadBuffer<Word = W>>(
         spi: &'a mut Spi<SPI, W>,
-        channel: Channel<CH>,
+        channel: &'a Channel<CH>,
         source: S,
     ) -> Self {
         let (_, len) = unsafe { source.read_buffer() };
         let config = DmaConfig::new().with_request(SPI::tx_dma_request());
         let destination = DmaTx::new();
-        let transfer = DmaTransfer::memory_to_peripheral(
+        let transfer = DmaTransferBuilder::memory_to_peripheral(
             config,
             channel,
             source,
@@ -165,33 +164,36 @@ where
     }
 }
 
-pub struct DuplexDmaTransfer<'a, SPI, W: Word, TX, RX, S, D> {
+pub struct DuplexDmaTransfer<'a, SPI, W: Word, TX: ChannelRegs, RX: ChannelRegs>
+{
     spi: &'a mut Spi<SPI, W>,
-    tx_transfer: DmaTransfer<TX, S, DmaTx<SPI, W>, MemoryToPeripheral>,
-    rx_transfer: DmaTransfer<RX, DmaRx<SPI, W>, D, PeripheralToMemory>,
+    tx_transfer: DmaTransfer<'a, TX>,
+    rx_transfer: DmaTransfer<'a, RX>,
 }
 
-impl<'a, SPI, W, RX, TX, S, D> DuplexDmaTransfer<'a, SPI, W, TX, RX, S, D>
+impl<'a, SPI, W, RX, TX> DuplexDmaTransfer<'a, SPI, W, TX, RX>
 where
     SPI: Instance,
     W: Word + DmaWord,
     TX: ChannelRegs,
     RX: ChannelRegs,
-    S: ReadBuffer<Word = W>,
-    D: WriteBuffer<Word = W>,
 {
-    pub fn new(
+    pub fn new<S, D>(
         spi: &'a mut Spi<SPI, W>,
-        tx_channel: Channel<TX>,
-        rx_channel: Channel<RX>,
+        tx_channel: &Channel<TX>,
+        rx_channel: &Channel<RX>,
         source: S,
         mut destination: D,
-    ) -> Self {
+    ) -> Self
+    where
+        S: ReadBuffer<Word = W>,
+        D: WriteBuffer<Word = W>,
+    {
         let (_, dest_len) = unsafe { destination.write_buffer() };
 
         let tx_config = DmaConfig::new().with_request(SPI::tx_dma_request());
         let tx_destination = DmaTx::new();
-        let tx_transfer = DmaTransfer::memory_to_peripheral(
+        let tx_transfer = DmaTransferBuilder::memory_to_peripheral(
             tx_config,
             tx_channel,
             source,
@@ -199,7 +201,7 @@ where
         );
         let rx_source = DmaRx::new();
         let rx_config = DmaConfig::new().with_request(SPI::rx_dma_request());
-        let rx_transfer = DmaTransfer::peripheral_to_memory(
+        let rx_transfer = DmaTransferBuilder::peripheral_to_memory(
             rx_config,
             rx_channel,
             rx_source,
