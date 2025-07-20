@@ -80,6 +80,9 @@ pub mod spi;
 pub mod dwt;
 
 #[cfg(feature = "device-selected")]
+pub mod usb;
+
+#[cfg(feature = "device-selected")]
 mod sealed {
     pub trait Sealed {}
 }
