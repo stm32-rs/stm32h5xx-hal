@@ -79,7 +79,8 @@ unsafe impl UsbPeripheral for Peripheral {
     const DP_PULL_UP_FEATURE: bool = true;
     const EP_MEMORY: *const () = 0x4001_6400 as _;
     const EP_MEMORY_SIZE: usize = 2048;
-    const EP_MEMORY_ACCESS_2X16: bool = true; // TODO: Is 32-bit same as "2x16"?
+    const EP_MEMORY_ACCESS: stm32_usbd::MemoryAccess =
+        stm32_usbd::MemoryAccess::Word32x1;
 
     fn enable() {
         cortex_m::interrupt::free(|_| {

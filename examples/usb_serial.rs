@@ -70,6 +70,12 @@ fn main() -> ! {
             Ok(count) if count > 0 => {
                 led.set_high();
 
+                if let Ok(s) = str::from_utf8(&buf[0..count]) {
+                    defmt::println!("{}", s);
+                } else {
+                    defmt::println!("{}", buf[0..count]);
+                }
+
                 // Echo back in upper case
                 for c in buf[0..count].iter_mut() {
                     if 0x61 <= *c && *c <= 0x7a {
