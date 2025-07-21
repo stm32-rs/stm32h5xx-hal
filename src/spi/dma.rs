@@ -382,7 +382,7 @@ where
     }
 
     async fn read_dma(&mut self, words: &mut [W]) -> Result<(), Error> {
-        let result = self.start_dma_read(words)?.await;
+        let result = self.start_dma_read(words)?.to_async().await;
         self.finish_transfer(result)
     }
 }
@@ -416,7 +416,7 @@ where
     }
 
     async fn write_dma(&mut self, words: &[W]) -> Result<(), Error> {
-        let result = self.start_dma_write(words)?.await;
+        let result = self.start_dma_write(words)?.to_async().await;
         self.finish_transfer(result)
     }
 }
@@ -464,7 +464,7 @@ where
         write: &[W],
     ) -> Result<(), Error> {
         let (tx, rx) = self.start_dma_duplex_transfer(read, write)?;
-
+        let (tx, rx) = (tx.to_async(), rx.to_async());
         let result = tx.await.and(rx.await);
 
         self.finish_transfer(result)
