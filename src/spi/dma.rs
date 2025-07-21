@@ -1,29 +1,34 @@
-use core::marker::PhantomData;
+use core::{
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 
 use embedded_dma::{ReadBuffer, WriteBuffer};
 
 use crate::gpdma::{
-    config::{DmaConfig, MemoryToPeripheral, PeripheralToMemory},
-    Channel, ChannelRegs, DmaTransfer, DmaTransferBuilder, Word as DmaWord,
+    config::DmaConfig,
+    DmaChannel, ChannelRegs, DmaTransfer, Error as DmaError, Word as DmaWord,
 };
 
 use super::{Error, Instance, Spi, Word};
 
-pub struct DmaRx<SPI, W> {
+struct DmaRx<SPI, W, CH> {
     _spi: PhantomData<SPI>,
     _word: PhantomData<W>,
+    channel: DmaChannel<CH>,
 }
 
-impl<SPI, W> DmaRx<SPI, W> {
-    fn new() -> Self {
+impl<SPI, W, CH: ChannelRegs> DmaRx<SPI, W, CH> {
+    fn new(channel: DmaChannel<CH>) -> Self {
         Self {
             _spi: PhantomData,
             _word: PhantomData,
+            channel,
         }
     }
 }
 
-unsafe impl<SPI: Instance, W: Word> ReadBuffer for DmaRx<SPI, W> {
+unsafe impl<SPI: Instance, W: Word, CH> ReadBuffer for &DmaRx<SPI, W, CH> {
     type Word = W;
 
     unsafe fn read_buffer(&self) -> (*const Self::Word, usize) {
@@ -31,21 +36,23 @@ unsafe impl<SPI: Instance, W: Word> ReadBuffer for DmaRx<SPI, W> {
     }
 }
 
-pub struct DmaTx<SPI, W> {
+struct DmaTx<SPI, W, CH> {
     _spi: PhantomData<SPI>,
     _word: PhantomData<W>,
+    channel: DmaChannel<CH>,
 }
 
-impl<SPI, W> DmaTx<SPI, W> {
-    fn new() -> Self {
+impl<SPI, W, CH: ChannelRegs> DmaTx<SPI, W, CH> {
+    fn new(channel: DmaChannel<CH>) -> Self {
         Self {
             _spi: PhantomData,
             _word: PhantomData,
+            channel,
         }
     }
 }
 
-unsafe impl<SPI: Instance, W: Word> WriteBuffer for DmaTx<SPI, W> {
+unsafe impl<SPI: Instance, W: Word, CH> WriteBuffer for &DmaTx<SPI, W, CH> {
     type Word = W;
 
     unsafe fn write_buffer(&mut self) -> (*mut Self::Word, usize) {
@@ -53,216 +60,214 @@ unsafe impl<SPI: Instance, W: Word> WriteBuffer for DmaTx<SPI, W> {
     }
 }
 
-pub struct RxDmaTransfer<'a, SPI, W: Word, CH, D> {
-    spi: &'a mut Spi<SPI, W>,
-    transfer: DmaTransfer<CH, DmaRx<SPI, W>, D, PeripheralToMemory>,
+struct DmaDuplex<SPI, W, TX, RX> {
+    tx: DmaTx<SPI, W, TX>,
+    rx: DmaRx<SPI, W, RX>,
 }
 
-impl<'a, SPI, W, CH, D> RxDmaTransfer<'a, SPI, W, CH, D>
+pub struct SpiAsync<SPI, W: Word, MODE> {
+    spi: Spi<SPI, W>,
+    mode: MODE,
+}
+
+impl<SPI, W, MODE> SpiAsync<SPI, W, MODE>
+where
+    SPI: Instance,
+    W: Word,
+{
+    pub fn new(spi: Spi<SPI, W>, mode: MODE) -> Self {
+        Self { spi, mode }
+    }
+
+    fn finish_transfer(
+        &mut self,
+        result: Result<(), DmaError>,
+    ) -> Result<(), Error> {
+        let result = match result {
+            Ok(_) => {
+                self.end_transaction();
+                Ok(())
+            }
+            Err(error) => {
+                self.abort_transaction();
+                Err(Error::DmaError(error))
+            }
+        };
+        self.inner.disable_dma();
+        result
+    }
+}
+
+impl<SPI, W, MODE> Deref for SpiAsync<SPI, W, MODE>
+where
+    SPI: Instance,
+    W: Word,
+{
+    type Target = Spi<SPI, W>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.spi
+    }
+}
+
+impl<SPI, W, MODE> DerefMut for SpiAsync<SPI, W, MODE>
+where
+    SPI: Instance,
+    W: Word,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.spi
+    }
+}
+
+impl<SPI, W, CH> SpiAsync<SPI, W, DmaRx<SPI, W, CH>>
 where
     SPI: Instance,
     W: Word + DmaWord,
     CH: ChannelRegs,
-    D: WriteBuffer<Word = W>,
 {
-    pub fn new(
-        spi: &'a mut Spi<SPI, W>,
-        channel: Channel<CH>,
-        mut destination: D,
-    ) -> Self {
-        let (_, len) = unsafe { destination.write_buffer() };
+    fn start_dma_read<'a>(
+        &'a mut self,
+        words: &'a mut [W],
+    ) -> Result<DmaTransfer<'a, CH>, Error>
+    where
+        CH: ChannelRegs,
+    {
         let config = DmaConfig::new().with_request(SPI::rx_dma_request());
-        let source = DmaRx::new();
-        let transfer = DmaTransferBuilder::peripheral_to_memory(
+
+        self.spi.inner.set_transfer_word_count(words.len() as u16);
+        // Make sure to handle any errors before initializing a transfer
+        self.setup_read_mode()?;
+
+        let spi = &mut self.spi;
+        let transfer = DmaTransfer::peripheral_to_memory(
             config,
-            channel,
-            source,
-            destination,
+            &self.mode.channel,
+            &self.mode,
+            words,
         );
-        spi.inner.set_transfer_word_count(len as u16);
-        Self { spi, transfer }
+
+        spi.inner.enable_rx_dma();
+
+        // Start DMA before starting the transaction to avoid receieve buffer overruns
+        transfer.start_nonblocking();
+        spi.start_transaction();
+
+        Ok(transfer)
     }
 
-    pub fn start(&mut self) -> Result<(), Error> {
-        self.spi.setup_read_mode()?;
-        self.spi.inner.enable_rx_dma();
-        self.transfer.start_with(|_, _| {
-            self.spi.start_transaction();
-        })?;
-        Ok(())
-    }
-
-    pub fn is_dma_complete(&self) -> Result<bool, Error> {
-        let complete = self.transfer.is_transfer_complete()?
-            && self.transfer.is_transfer_complete()?;
-        Ok(complete)
-    }
-
-    pub fn end_transfer(&mut self) {
-        self.spi.end_transaction();
-        self.spi.inner.disable_dma();
-    }
-
-    pub fn free(self) -> Result<(Channel<CH>, D), Error> {
-        let (ch, _, d) = self.transfer.free()?;
-        Ok((ch, d))
+    async fn read_dma(&mut self, words: &mut [W]) -> Result<(), Error> {
+        let result = self.start_dma_read(words)?.await;
+        self.finish_transfer(result)
     }
 }
 
-pub struct TxDmaTransfer<'a, SPI, W: Word, CH: ChannelRegs> {
-    spi: &'a mut Spi<SPI, W>,
-    transfer: DmaTransfer<'a, CH>,
-}
-
-impl<'a, SPI, W, CH> TxDmaTransfer<'a, SPI, W, CH>
+impl<SPI, W, CH> SpiAsync<SPI, W, DmaTx<SPI, W, CH>>
 where
     SPI: Instance,
-    W: DmaWord + Word,
+    W: Word + DmaWord,
     CH: ChannelRegs,
 {
-    pub fn new<S: ReadBuffer<Word = W>>(
-        spi: &'a mut Spi<SPI, W>,
-        channel: &'a Channel<CH>,
-        source: S,
-    ) -> Self {
-        let (_, len) = unsafe { source.read_buffer() };
+    fn start_dma_write<'a>(
+        &'a mut self,
+        words: &'a [W],
+    ) -> Result<DmaTransfer<'a, CH>, Error>
+    where
+        CH: ChannelRegs,
+    {
         let config = DmaConfig::new().with_request(SPI::tx_dma_request());
-        let destination = DmaTx::new();
-        let transfer = DmaTransferBuilder::memory_to_peripheral(
+
+        self.inner.set_transfer_word_count(words.len() as u16);
+
+        // Make sure to handle any errors before initializing a transfer
+        self.setup_write_mode()?;
+
+        let spi = &mut self.spi;
+        let transfer = DmaTransfer::memory_to_peripheral(
             config,
-            channel,
-            source,
-            destination,
+            &self.mode.channel,
+            words,
+            &self.mode,
         );
-        spi.inner.set_transfer_word_count(len as u16);
-        Self { spi, transfer }
+
+        transfer.start_nonblocking();
+        spi.inner.enable_tx_dma();
+        spi.start_transaction();
+
+        Ok(transfer)
     }
 
-    pub fn start(&mut self) -> Result<(), Error> {
-        self.spi.setup_write_mode()?;
-        self.transfer.start_with(|_, _| {
-            self.spi.inner.enable_tx_dma();
-            self.spi.start_transaction();
-        })?;
-        Ok(())
-    }
-
-    pub fn is_dma_complete(&self) -> Result<bool, Error> {
-        let complete = self.transfer.is_transfer_complete()?
-            && self.transfer.is_transfer_complete()?;
-        Ok(complete)
-    }
-
-    pub fn end_transfer(&mut self) {
-        self.spi.end_transaction();
-        self.spi.inner.disable_dma();
-    }
-
-    pub fn free(self) -> Result<(Channel<CH>, S), Error> {
-        let (ch, s, _) = self.transfer.free()?;
-        Ok((ch, s))
+    async fn write_dma(&mut self, words: &[W]) -> Result<(), Error> {
+        let result = self.start_dma_write(words)?.await;
+        self.finish_transfer(result)
     }
 }
 
-pub struct DuplexDmaTransfer<'a, SPI, W: Word, TX: ChannelRegs, RX: ChannelRegs>
-{
-    spi: &'a mut Spi<SPI, W>,
-    tx_transfer: DmaTransfer<'a, TX>,
-    rx_transfer: DmaTransfer<'a, RX>,
-}
-
-impl<'a, SPI, W, RX, TX> DuplexDmaTransfer<'a, SPI, W, TX, RX>
+impl<SPI, W, TX, RX> SpiAsync<SPI, W, DmaDuplex<SPI, W, TX, RX>>
 where
     SPI: Instance,
     W: Word + DmaWord,
     TX: ChannelRegs,
     RX: ChannelRegs,
 {
-    pub fn new<S, D>(
-        spi: &'a mut Spi<SPI, W>,
-        tx_channel: &Channel<TX>,
-        rx_channel: &Channel<RX>,
-        source: S,
-        mut destination: D,
-    ) -> Self
-    where
-        S: ReadBuffer<Word = W>,
-        D: WriteBuffer<Word = W>,
-    {
-        let (_, dest_len) = unsafe { destination.write_buffer() };
+    fn start_dma_duplex_transfer<'a>(
+        &'a mut self,
+        read: &'a mut [W],
+        write: &'a [W],
+    ) -> Result<(DmaTransfer<'a, TX>, DmaTransfer<'a, RX>), Error> {
+        let tx_config =
+            DmaConfig::new().with_request(SPI::tx_dma_request());
 
-        let tx_config = DmaConfig::new().with_request(SPI::tx_dma_request());
-        let tx_destination = DmaTx::new();
-        let tx_transfer = DmaTransferBuilder::memory_to_peripheral(
+        let rx_config =
+            DmaConfig::new().with_request(SPI::rx_dma_request());
+
+        self.inner.set_transfer_word_count(read.len() as u16);
+
+        self.check_transfer_mode()?;
+
+        let spi = &mut self.spi;
+        let tx_transfer = DmaTransfer::memory_to_peripheral(
             tx_config,
-            tx_channel,
-            source,
-            tx_destination,
+            &self.mode.tx.channel,
+            write,
+            &self.mode.tx,
         );
-        let rx_source = DmaRx::new();
-        let rx_config = DmaConfig::new().with_request(SPI::rx_dma_request());
-        let rx_transfer = DmaTransferBuilder::peripheral_to_memory(
+
+        let rx_transfer = DmaTransfer::peripheral_to_memory(
             rx_config,
-            rx_channel,
-            rx_source,
-            destination,
+            &self.mode.rx.channel,
+            &self.mode.rx,
+            read,
         );
-        spi.inner.set_transfer_word_count(dest_len as u16);
-        Self {
-            spi,
-            tx_transfer,
-            rx_transfer,
-        }
+
+        spi.inner.enable_rx_dma();
+        rx_transfer.start_nonblocking();
+        tx_transfer.start_nonblocking();
+        spi.inner.enable_tx_dma();
+        spi.start_transaction();
+
+        Ok((tx_transfer, rx_transfer))
     }
 
-    pub fn enable_dma_interrupts(&self) {
-        self.rx_transfer.enable_interrupts()
+    async fn transfer_dma(
+        &mut self,
+        read: &mut [W],
+        write: &[W],
+    ) -> Result<(), Error> {
+        let (tx, rx) = self.start_dma_duplex_transfer(read, write)?;
+
+        let result = tx.await.and(rx.await);
+
+        self.finish_transfer(result)
     }
 
-    pub fn disable_dma_interrupts(&self) {
-        self.rx_transfer.disable_interrupts()
-    }
-
-    pub fn start(&mut self) -> Result<(), Error> {
-        self.spi.check_transfer_mode()?;
-        self.spi.inner.enable_rx_dma();
-        self.rx_transfer.start_nonblocking();
-        self.tx_transfer.start_nonblocking();
-        self.spi.inner.enable_tx_dma();
-        self.spi.start_transaction();
-        Ok(())
-    }
-
-    pub fn is_dma_complete(&self) -> Result<bool, Error> {
-        let complete = self.tx_transfer.is_transfer_complete()?
-            && self.rx_transfer.is_transfer_complete()?;
-        Ok(complete)
-    }
-
-    pub fn wait_for_complete(&mut self) -> Result<(), Error> {
-        self.tx_transfer.wait_for_transfer_complete()?;
-        self.rx_transfer.wait_for_transfer_complete()?;
-        self.spi.end_transaction();
-        self.spi.inner.disable_dma();
-        Ok(())
-    }
-
-    pub fn end_transfer(&mut self) {
-        self.spi.end_transaction();
-        self.spi.inner.disable_dma();
-    }
-
-    pub fn abort(&mut self) -> Result<(), Error> {
-        self.end_transfer();
-        self.tx_transfer.abort()?;
-        self.rx_transfer.abort()?;
-        Ok(())
-    }
-
-    pub fn free(mut self) -> Result<(Channel<TX>, Channel<RX>, S, D), Error> {
-        self.end_transfer();
-        let (tx, s, _) = self.tx_transfer.free()?;
-        let (rx, _, d) = self.rx_transfer.free()?;
-        Ok((tx, rx, s, d))
+    async fn transfer_inplace_dma(
+        &mut self,
+        words: &mut [W],
+    ) -> Result<(), Error> {
+        // Note (unsafe): Data will be read from the start of the buffer before data is written
+        // to those locations just like for blocking non-DMA in-place transfers
+        let write: &[W] = unsafe { *(words.as_ptr() as *const &[W]) };
+        self.transfer_dma(words, write).await
     }
 }
