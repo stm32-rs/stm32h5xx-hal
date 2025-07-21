@@ -1,40 +1,13 @@
-use core::{
-    marker::PhantomData,
-    ops::{Deref, DerefMut},
-};
+use core::ops::{Deref, DerefMut};
 
-use embedded_dma::{ReadBuffer, WriteBuffer};
 use embedded_hal::spi::ErrorType;
 use embedded_hal_async::spi::SpiBus;
 
 use crate::gpdma::{
-    config::{DmaConfig, MemoryToPeripheral, PeripheralToMemory, TransferType},
-    ChannelRegs, DmaChannel, DmaTransfer, Error as DmaError, Word as DmaWord,
+    config::DmaConfig, periph::{DmaDuplex, DmaRx, DmaTx, Rx, RxAddr, Tx, TxAddr}, ChannelRegs, DmaChannel, DmaTransfer, Error as DmaError, Word as DmaWord
 };
 
 use super::{Error, Instance, Spi, Word};
-
-pub trait TxAddr<W: DmaWord> {
-    /// Returns a pointer to the peripheral's transmit data register.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure that the returned pointer is only used when it is valid to access
-    /// the peripheral's transmit data register, and that no data races or invalid memory accesses
-    /// occur.
-    unsafe fn tx_addr() -> *mut W;
-}
-
-pub trait RxAddr<W: DmaWord> {
-    /// Returns a pointer to the peripheral's receive data register.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure that the returned pointer is only used when it is valid to access
-    /// the peripheral's receive data register, and that no data races or invalid memory accesses
-    /// occur.
-    unsafe fn rx_addr() -> *const W;
-}
 
 impl<SPI: Instance, W: DmaWord> TxAddr<W> for SPI {
     unsafe fn tx_addr() -> *mut W {
@@ -86,151 +59,6 @@ where
     }
 }
 
-trait Tx<W> {
-    fn init_tx_transfer<'a>(
-        &'a self,
-        config: DmaConfig<MemoryToPeripheral, W, W>,
-        words: &'a [W],
-    ) -> DmaTransfer<'a, impl ChannelRegs>;
-}
-
-trait Rx<W> {
-    fn init_rx_transfer<'a>(
-        &'a self,
-        config: DmaConfig<PeripheralToMemory, W, W>,
-        words: &'a mut [W],
-    ) -> DmaTransfer<'a, impl ChannelRegs>;
-}
-
-pub struct DmaRx<PERIPH, W, CH> {
-    _periph: PhantomData<PERIPH>,
-    _word: PhantomData<W>,
-    channel: DmaChannel<CH>,
-}
-
-impl<PERIPH, W, CH: ChannelRegs> DmaRx<PERIPH, W, CH> {
-    fn new(channel: DmaChannel<CH>) -> Self {
-        Self {
-            _periph: PhantomData,
-            _word: PhantomData,
-            channel,
-        }
-    }
-}
-
-unsafe impl<PERIPH: RxAddr<W>, W: DmaWord, CH> ReadBuffer for &DmaRx<PERIPH, W, CH> {
-    type Word = W;
-
-    unsafe fn read_buffer(&self) -> (*const Self::Word, usize) {
-        (PERIPH::rx_addr(), 1)
-    }
-}
-
-impl<PERIPH, W, CH> Rx<W> for DmaRx<PERIPH, W, CH>
-where
-    PERIPH: RxAddr<W>,
-    CH: ChannelRegs,
-    W: DmaWord,
-{
-    fn init_rx_transfer<'a>(
-        &'a self,
-        config: DmaConfig<PeripheralToMemory, W, W>,
-        words: &'a mut [W],
-    ) -> DmaTransfer<'a, impl ChannelRegs> {
-        DmaTransfer::peripheral_to_memory(config, &self.channel, self, words)
-    }
-}
-
-pub struct DmaTx<PERIPH, W, CH> {
-    _periph: PhantomData<PERIPH>,
-    _word: PhantomData<W>,
-    channel: DmaChannel<CH>,
-}
-
-impl<PERIPH, W, CH: ChannelRegs> DmaTx<PERIPH, W, CH> {
-    fn new(channel: DmaChannel<CH>) -> Self {
-        Self {
-            _periph: PhantomData,
-            _word: PhantomData,
-            channel,
-        }
-    }
-}
-
-unsafe impl<PERIPH: TxAddr<W>, W: DmaWord, CH> WriteBuffer for &DmaTx<PERIPH, W, CH> {
-    type Word = W;
-
-    unsafe fn write_buffer(&mut self) -> (*mut Self::Word, usize) {
-        (PERIPH::tx_addr(), 1)
-    }
-}
-
-impl<PERIPH, W, CH> Tx<W> for DmaTx<PERIPH, W, CH>
-where
-    PERIPH: TxAddr<W>,
-    CH: ChannelRegs,
-    W: DmaWord,
-{
-    fn init_tx_transfer<'a>(
-        &'a self,
-        config: DmaConfig<MemoryToPeripheral, W, W>,
-        words: &'a [W],
-    ) -> DmaTransfer<'a, impl ChannelRegs> {
-        DmaTransfer::memory_to_peripheral(config, &self.channel, words, self)
-    }
-}
-
-pub struct DmaDuplex<PERIPH, W, TX, RX> {
-    tx: DmaTx<PERIPH, W, TX>,
-    rx: DmaRx<PERIPH, W, RX>,
-}
-
-impl<PERIPH, W, TX, RX> DmaDuplex<PERIPH, W, TX, RX>
-where
-    PERIPH: TxAddr<W> + RxAddr<W>,
-    W: DmaWord,
-    TX: ChannelRegs,
-    RX: ChannelRegs,
-{
-    fn new(tx: DmaChannel<TX>, rx: DmaChannel<RX>) -> Self {
-        Self {
-            tx: DmaTx::new(tx),
-            rx: DmaRx::new(rx),
-        }
-    }
-}
-
-impl<PERIPH, W, TX, RX> Tx<W> for DmaDuplex<PERIPH, W, TX, RX>
-where
-    PERIPH: TxAddr<W> + RxAddr<W>,
-    W: DmaWord,
-    TX: ChannelRegs,
-    RX: ChannelRegs,
-{
-    fn init_tx_transfer<'a>(
-        &'a self,
-        config: DmaConfig<MemoryToPeripheral, W, W>,
-        words: &'a [W],
-    ) -> DmaTransfer<'a, impl ChannelRegs> {
-        self.tx.init_tx_transfer(config, words)
-    }
-}
-
-impl<PERIPH, W, TX, RX> Rx<W> for DmaDuplex<PERIPH, W, TX, RX>
-where
-    PERIPH: TxAddr<W> + RxAddr<W>,
-    W: Word + DmaWord,
-    TX: ChannelRegs,
-    RX: ChannelRegs,
-{
-    fn init_rx_transfer<'a>(
-        &'a self,
-        config: DmaConfig<PeripheralToMemory, W, W>,
-        words: &'a mut [W],
-    ) -> DmaTransfer<'a, impl ChannelRegs> {
-        self.rx.init_rx_transfer(config, words)
-    }
-}
 
 pub struct SpiDma<SPI, W: Word, MODE> {
     spi: Spi<SPI, W>,
@@ -277,12 +105,12 @@ where
     ) -> Self {
         Self {
             spi,
-            mode: DmaTx::new(channel),
+            mode: DmaTx::from(channel),
         }
     }
 
     pub fn free(self) -> (Spi<SPI, W>, DmaChannel<CH>) {
-        (self.spi, self.mode.channel)
+        (self.spi, self.mode.into())
     }
 }
 
@@ -298,18 +126,18 @@ where
     ) -> Self {
         Self {
             spi,
-            mode: DmaRx::new(channel),
+            mode: DmaRx::from(channel),
         }
     }
 
     pub fn free(self) -> (Spi<SPI, W>, DmaChannel<CH>) {
-        (self.spi, self.mode.channel)
+        (self.spi, self.mode.into())
     }
 }
 
 impl<SPI, W, TX, RX> SpiDma<SPI, W, DmaDuplex<SPI, W, TX, RX>>
 where
-    SPI: Instance,
+    SPI: Instance + TxAddr<W> + RxAddr<W>,
     W: Word + DmaWord,
     TX: ChannelRegs,
     RX: ChannelRegs,
@@ -326,7 +154,8 @@ where
     }
 
     pub fn free(self) -> (Spi<SPI, W>, DmaChannel<TX>, DmaChannel<RX>) {
-        (self.spi, self.mode.tx.channel, self.mode.rx.channel)
+        let (tx, rx) = self.mode.free();
+        (self.spi, tx, rx)
     }
 }
 
