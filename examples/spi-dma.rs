@@ -15,13 +15,13 @@ use cortex_m_semihosting::debug;
 use stm32h5xx_hal::{
     pac,
     prelude::*,
-    spi::{self, dma::DuplexDmaTransfer, Config as SpiConfig},
+    spi::{self, Config as SpiConfig},
 };
 
 static mut SOURCE_BYTES: MaybeUninit<[u8; 40]> = MaybeUninit::uninit();
 static mut DEST_BYTES: MaybeUninit<[u8; 40]> = MaybeUninit::zeroed();
 
-fn u8_to_u8_sequential() -> (&'static [u8; 40], &'static mut [u8; 40]) {
+fn u8_buf_pair() -> (&'static [u8; 40], &'static mut [u8; 40]) {
     let buf: &mut [MaybeUninit<u8>; 40] = unsafe {
         &mut *(core::ptr::addr_of_mut!(SOURCE_BYTES)
             as *mut [MaybeUninit<u8>; 40])
@@ -74,7 +74,7 @@ fn main() -> ! {
     log::info!("stm32h5xx-hal example - SPI DMA");
 
     // Initialise the SPI peripheral.
-    let mut spi = dp.SPI2.spi(
+    let spi = dp.SPI2.spi(
         (sck, miso, mosi),
         SpiConfig::new(spi::MODE_0),
         1.MHz(),
@@ -82,17 +82,17 @@ fn main() -> ! {
         &ccdr.clocks,
     );
 
-    let (source_buf, dest_buf) = u8_to_u8_sequential();
+    let (source_buf, dest_buf) = u8_buf_pair();
 
     let channels = dp.GPDMA1.channels(ccdr.peripheral.GPDMA1);
     let tx_ch = channels.0;
     let rx_ch = channels.1;
 
-    let mut transfer =
-        DuplexDmaTransfer::new(&mut spi, tx_ch, rx_ch, source_buf, dest_buf);
-    transfer.start().unwrap();
-    transfer.wait_for_complete().unwrap();
-    let (_, _, source_buf, dest_buf) = transfer.free().unwrap();
+    let mut spi = spi.use_dma_duplex(tx_ch, rx_ch);
+
+    let (tx, rx) = spi.start_dma_duplex_transfer(dest_buf, source_buf).unwrap();
+    tx.wait_for_transfer_complete().unwrap();
+    rx.wait_for_transfer_complete().unwrap();
 
     assert_eq!(source_buf, dest_buf);
 
