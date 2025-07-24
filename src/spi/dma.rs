@@ -5,9 +5,10 @@ use core::{
     task::{Context, Poll},
 };
 
-use atomic_waker::AtomicWaker;
 use embedded_hal::spi::ErrorType;
 use embedded_hal_async::spi::SpiBus;
+use futures_util::join;
+use futures_util::task::AtomicWaker;
 
 use crate::gpdma::{
     config::DmaConfig,
@@ -104,9 +105,7 @@ where
         result: Result<(), DmaError>,
     ) -> Result<(), Error> {
         let result = match result {
-            Ok(_) => {
-                SpiDmaFuture::new(self).await
-            }
+            Ok(_) => SpiDmaFuture::new(self).await,
             Err(error) => {
                 self.abort_transaction();
                 Err(Error::DmaError(error))
@@ -319,7 +318,8 @@ where
     ) -> Result<(), Error> {
         let (tx, rx) = self.start_dma_duplex_transfer(read, write)?;
         let (tx, rx) = (tx.to_async(), rx.to_async());
-        let result = tx.await.and(rx.await);
+        let results = join!(tx, rx);
+        let result = results.0.and(results.1);
 
         self.finish_transfer_async(result).await
     }
