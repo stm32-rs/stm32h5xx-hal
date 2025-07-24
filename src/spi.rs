@@ -503,6 +503,10 @@ impl<SPI: Instance, W: Word> Inner<SPI, W> {
         self.spi.cr1().modify(|_, w| w.spe().enabled());
     }
 
+    fn is_enabled(&self) -> bool {
+        self.spi.cr1().read().spe().is_enabled()
+    }
+
     #[inline]
     pub fn start_transfer(&self) {
         self.spi.cr1().modify(|_, w| w.cstart().started());
@@ -857,17 +861,28 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
         self.inner.start_transfer();
     }
 
-    /// Checks if the current transaction is complete and disables the
-    /// peripheral if it is, returning true. If it isn't, returns false.
-    fn end_transaction_if_done(&mut self) -> bool {
+    fn is_transaction_complete(&mut self) -> bool {
         let sr = self.spi().sr().read();
-        let is_complete = if self.inner.is_transmitter() {
+        if self.inner.is_transmitter() {
             sr.eot().is_completed() && sr.txc().is_completed()
         } else {
             sr.eot().is_completed()
-        };
+        }
+    }
 
-        if !is_complete {
+    fn disable(&mut self) {
+        self.spi()
+            .ifcr()
+            .write(|w| w.txtfc().clear().eotc().clear().suspc().clear());
+
+        self.inner.disable();
+        self.inner.reset_transfer_word_count();
+    }
+
+    /// Checks if the current transaction is complete and disables the
+    /// peripheral if it is, returning true. If it isn't, returns false.
+    fn end_transaction_if_done(&mut self) -> bool {
+        if !self.is_transaction_complete() {
             return false;
         }
 
@@ -878,12 +893,7 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
             cortex_m::asm::nop()
         }
 
-        self.spi()
-            .ifcr()
-            .write(|w| w.txtfc().clear().eotc().clear().suspc().clear());
-
-        self.inner.disable();
-        self.inner.reset_transfer_word_count();
+        self.disable();
         true
     }
 
@@ -896,8 +906,7 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
     }
 
     fn abort_transaction(&mut self) {
-        self.inner.disable();
-        self.inner.reset_transfer_word_count();
+        self.disable();
     }
 
     /// Deconstructs the SPI peripheral and returns the component parts.
