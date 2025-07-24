@@ -1,10 +1,18 @@
-use core::ops::{Deref, DerefMut};
+use core::{
+    future::Future,
+    ops::{Deref, DerefMut},
+    pin::Pin,
+    task::{Context, Poll},
+};
 
+use atomic_waker::AtomicWaker;
 use embedded_hal::spi::ErrorType;
 use embedded_hal_async::spi::SpiBus;
 
 use crate::gpdma::{
-    config::DmaConfig, periph::{DmaDuplex, DmaRx, DmaTx, Rx, RxAddr, Tx, TxAddr}, ChannelRegs, DmaChannel, DmaTransfer, Error as DmaError, Word as DmaWord
+    config::DmaConfig,
+    periph::{DmaDuplex, DmaRx, DmaTx, Rx, RxAddr, Tx, TxAddr},
+    ChannelRegs, DmaChannel, DmaTransfer, Error as DmaError, Word as DmaWord,
 };
 
 use super::{Error, Instance, Spi, Word};
@@ -59,7 +67,6 @@ where
     }
 }
 
-
 pub struct SpiDma<SPI, W: Word, MODE> {
     spi: Spi<SPI, W>,
     mode: MODE,
@@ -91,6 +98,22 @@ where
         self.inner.disable_dma();
         result
     }
+
+    async fn finish_transfer_async(
+        &mut self,
+        result: Result<(), DmaError>,
+    ) -> Result<(), Error> {
+        let result = match result {
+            Ok(_) => {
+                SpiDmaFuture::new(self).await
+            }
+            Err(error) => {
+                self.abort_transaction();
+                Err(Error::DmaError(error))
+            }
+        };
+        result
+    }
 }
 
 impl<SPI, W, CH> SpiDma<SPI, W, DmaTx<SPI, W, CH>>
@@ -110,7 +133,9 @@ where
     }
 
     pub fn free(self) -> (Spi<SPI, W>, DmaChannel<CH>) {
-        (self.spi, self.mode.into())
+        let spi = self.spi;
+        let channel = self.mode.into();
+        (spi, channel)
     }
 }
 
@@ -212,7 +237,7 @@ where
 
     async fn read_dma(&mut self, words: &mut [W]) -> Result<(), Error> {
         let result = self.start_dma_read(words)?.to_async().await;
-        self.finish_transfer(result)
+        self.finish_transfer_async(result).await
     }
 }
 
@@ -246,7 +271,7 @@ where
 
     async fn write_dma(&mut self, words: &[W]) -> Result<(), Error> {
         let result = self.start_dma_write(words)?.to_async().await;
-        self.finish_transfer(result)
+        self.finish_transfer_async(result).await
     }
 }
 
@@ -296,7 +321,7 @@ where
         let (tx, rx) = (tx.to_async(), rx.to_async());
         let result = tx.await.and(rx.await);
 
-        self.finish_transfer(result)
+        self.finish_transfer_async(result).await
     }
 
     async fn transfer_inplace_dma(
@@ -421,5 +446,51 @@ where
     async fn flush(&mut self) -> Result<(), Self::Error> {
         // This is handled within each of the above functions
         Ok(())
+    }
+}
+
+struct SpiDmaFuture<'a, SPI: Instance, W: Word, MODE> {
+    spi: &'a mut SpiDma<SPI, W, MODE>,
+    waker: AtomicWaker,
+}
+
+impl<'a, SPI: Instance, W: Word, MODE> SpiDmaFuture<'a, SPI, W, MODE> {
+    fn new(spi: &'a mut SpiDma<SPI, W, MODE>) -> Self {
+        Self {
+            spi,
+            waker: AtomicWaker::new(),
+        }
+    }
+}
+
+impl<SPI: Instance, W: Word, MODE> Unpin for SpiDmaFuture<'_, SPI, W, MODE> {}
+
+impl<SPI: Instance, W: Word, MODE> Drop for SpiDmaFuture<'_, SPI, W, MODE> {
+    fn drop(&mut self) {
+        if !self.spi.is_transaction_complete() {
+            self.spi.abort_transaction();
+        } else if self.spi.inner.is_enabled() {
+            self.spi.disable();
+        } else {
+            // do nothing if the transaction is already complete
+        }
+    }
+}
+
+impl<SPI: Instance, W: Word, MODE> Future for SpiDmaFuture<'_, SPI, W, MODE> {
+    type Output = Result<(), Error>;
+
+    fn poll(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Self::Output> {
+        self.waker.register(cx.waker());
+
+        if self.spi.is_transaction_complete() {
+            self.spi.disable();
+            Poll::Ready(Ok(()))
+        } else {
+            Poll::Pending
+        }
     }
 }
