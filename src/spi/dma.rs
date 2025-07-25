@@ -13,7 +13,7 @@ use futures_util::task::AtomicWaker;
 use crate::gpdma::{
     config::DmaConfig,
     periph::{DmaDuplex, DmaRx, DmaTx, Rx, RxAddr, Tx, TxAddr},
-    ChannelRegs, DmaChannel, DmaTransfer, Error as DmaError, Word as DmaWord,
+    DmaChannel, DmaTransfer, Error as DmaError, Word as DmaWord,
 };
 
 use super::{Error, Instance, Spi, Word};
@@ -37,43 +37,43 @@ where
 {
     pub fn use_dma_tx<CH>(
         self,
-        channel: DmaChannel<CH>,
-    ) -> SpiDma<SPI, W, DmaTx<SPI, W, CH>>
+        channel: CH,
+    ) -> SpiDma<SPI, DmaTx<SPI, W, CH>, W>
     where
-        CH: ChannelRegs,
+        CH: DmaChannel,
     {
         SpiDma::new_simplex_transmitter(self, channel)
     }
 
     pub fn use_dma_rx<CH>(
         self,
-        channel: DmaChannel<CH>,
-    ) -> SpiDma<SPI, W, DmaRx<SPI, W, CH>>
+        channel: CH,
+    ) -> SpiDma<SPI, DmaRx<SPI, W, CH>, W>
     where
-        CH: ChannelRegs,
+        CH: DmaChannel,
     {
         SpiDma::new_simplex_receiver(self, channel)
     }
 
     pub fn use_dma_duplex<TX, RX>(
         self,
-        tx_channel: DmaChannel<TX>,
-        rx_channel: DmaChannel<RX>,
-    ) -> SpiDma<SPI, W, DmaDuplex<SPI, W, TX, RX>>
+        tx_channel: TX,
+        rx_channel: RX,
+    ) -> SpiDma<SPI, DmaDuplex<SPI, W, TX, RX>, W>
     where
-        TX: ChannelRegs,
-        RX: ChannelRegs,
+        TX: DmaChannel,
+        RX: DmaChannel,
     {
         SpiDma::new_duplex(self, tx_channel, rx_channel)
     }
 }
 
-pub struct SpiDma<SPI, W: Word, MODE> {
+pub struct SpiDma<SPI, MODE, W: Word = u8> {
     spi: Spi<SPI, W>,
     mode: MODE,
 }
 
-impl<SPI, W, MODE> SpiDma<SPI, W, MODE>
+impl<SPI, MODE, W> SpiDma<SPI, MODE, W>
 where
     SPI: Instance,
     W: Word,
@@ -115,61 +115,55 @@ where
     }
 }
 
-impl<SPI, W, CH> SpiDma<SPI, W, DmaTx<SPI, W, CH>>
+impl<SPI, CH, W> SpiDma<SPI, DmaTx<SPI, W, CH>, W>
 where
     SPI: Instance,
     W: Word,
-    CH: ChannelRegs,
+    CH: DmaChannel,
 {
-    pub fn new_simplex_transmitter(
-        spi: Spi<SPI, W>,
-        channel: DmaChannel<CH>,
-    ) -> Self {
+    pub fn new_simplex_transmitter(spi: Spi<SPI, W>, channel: CH) -> Self {
         Self {
             spi,
             mode: DmaTx::from(channel),
         }
     }
 
-    pub fn free(self) -> (Spi<SPI, W>, DmaChannel<CH>) {
+    pub fn free(self) -> (Spi<SPI, W>, CH) {
         let spi = self.spi;
-        let channel = self.mode.into();
+        let channel = self.mode.free();
         (spi, channel)
     }
 }
 
-impl<SPI, W, CH> SpiDma<SPI, W, DmaRx<SPI, W, CH>>
+impl<SPI, CH, W> SpiDma<SPI, DmaRx<SPI, W, CH>, W>
 where
     SPI: Instance,
     W: Word,
-    CH: ChannelRegs,
+    CH: DmaChannel,
 {
-    pub fn new_simplex_receiver(
-        spi: Spi<SPI, W>,
-        channel: DmaChannel<CH>,
-    ) -> Self {
+    pub fn new_simplex_receiver(spi: Spi<SPI, W>, channel: CH) -> Self {
         Self {
             spi,
             mode: DmaRx::from(channel),
         }
     }
 
-    pub fn free(self) -> (Spi<SPI, W>, DmaChannel<CH>) {
-        (self.spi, self.mode.into())
+    pub fn free(self) -> (Spi<SPI, W>, CH) {
+        (self.spi, self.mode.free())
     }
 }
 
-impl<SPI, W, TX, RX> SpiDma<SPI, W, DmaDuplex<SPI, W, TX, RX>>
+impl<SPI, TX, RX, W> SpiDma<SPI, DmaDuplex<SPI, W, TX, RX>, W>
 where
     SPI: Instance + TxAddr<W> + RxAddr<W>,
     W: Word + DmaWord,
-    TX: ChannelRegs,
-    RX: ChannelRegs,
+    TX: DmaChannel,
+    RX: DmaChannel,
 {
     pub fn new_duplex(
         spi: Spi<SPI, W>,
-        tx_channel: DmaChannel<TX>,
-        rx_channel: DmaChannel<RX>,
+        tx_channel: TX,
+        rx_channel: RX,
     ) -> Self {
         Self {
             spi,
@@ -177,13 +171,13 @@ where
         }
     }
 
-    pub fn free(self) -> (Spi<SPI, W>, DmaChannel<TX>, DmaChannel<RX>) {
+    pub fn free(self) -> (Spi<SPI, W>, TX, RX) {
         let (tx, rx) = self.mode.free();
         (self.spi, tx, rx)
     }
 }
 
-impl<SPI, W, MODE> Deref for SpiDma<SPI, W, MODE>
+impl<SPI, MODE, W> Deref for SpiDma<SPI, MODE, W>
 where
     SPI: Instance,
     W: Word,
@@ -195,7 +189,7 @@ where
     }
 }
 
-impl<SPI, W, MODE> DerefMut for SpiDma<SPI, W, MODE>
+impl<SPI, MODE, W> DerefMut for SpiDma<SPI, MODE, W>
 where
     SPI: Instance,
     W: Word,
@@ -205,7 +199,7 @@ where
     }
 }
 
-impl<SPI, W, MODE> SpiDma<SPI, W, MODE>
+impl<SPI, MODE, W> SpiDma<SPI, MODE, W>
 where
     SPI: Instance,
     W: Word + DmaWord,
@@ -214,7 +208,7 @@ where
     pub fn start_dma_read<'a>(
         &'a mut self,
         words: &'a mut [W],
-    ) -> Result<DmaTransfer<'a, impl ChannelRegs + use<'a, SPI, W, MODE>>, Error>
+    ) -> Result<DmaTransfer<'a, impl DmaChannel + use<'a, SPI, W, MODE>>, Error>
     {
         let config = DmaConfig::new().with_request(SPI::rx_dma_request());
 
@@ -240,7 +234,7 @@ where
     }
 }
 
-impl<SPI, W, MODE> SpiDma<SPI, W, MODE>
+impl<SPI, MODE, W> SpiDma<SPI, MODE, W>
 where
     SPI: Instance,
     W: Word + DmaWord,
@@ -249,7 +243,7 @@ where
     pub fn start_dma_write<'a>(
         &'a mut self,
         words: &'a [W],
-    ) -> Result<DmaTransfer<'a, impl ChannelRegs + use<'a, SPI, W, MODE>>, Error>
+    ) -> Result<DmaTransfer<'a, impl DmaChannel + use<'a, SPI, W, MODE>>, Error>
     {
         let config = DmaConfig::new().with_request(SPI::tx_dma_request());
 
@@ -274,7 +268,7 @@ where
     }
 }
 
-impl<SPI, W, MODE> SpiDma<SPI, W, MODE>
+impl<SPI, MODE, W> SpiDma<SPI, MODE, W>
 where
     SPI: Instance,
     W: Word + DmaWord,
@@ -286,8 +280,8 @@ where
         write: &'a [W],
     ) -> Result<
         (
-            DmaTransfer<'a, impl ChannelRegs + use<'a, SPI, W, MODE>>,
-            DmaTransfer<'a, impl ChannelRegs + use<'a, SPI, W, MODE>>,
+            DmaTransfer<'a, impl DmaChannel + use<'a, SPI, W, MODE>>,
+            DmaTransfer<'a, impl DmaChannel + use<'a, SPI, W, MODE>>,
         ),
         Error,
     > {
@@ -335,7 +329,7 @@ where
     }
 }
 
-impl<SPI, W, MODE> ErrorType for SpiDma<SPI, W, MODE>
+impl<SPI, MODE, W> ErrorType for SpiDma<SPI, MODE, W>
 where
     SPI: Instance,
     W: Word,
@@ -343,11 +337,11 @@ where
     type Error = Error;
 }
 
-impl<SPI, W, CH> SpiBus<W> for SpiDma<SPI, W, DmaTx<SPI, W, CH>>
+impl<SPI, CH, W> SpiBus<W> for SpiDma<SPI, DmaTx<SPI, W, CH>, W>
 where
     SPI: Instance,
     W: Word + DmaWord,
-    CH: ChannelRegs,
+    CH: DmaChannel,
 {
     async fn read(&mut self, _words: &mut [W]) -> Result<(), Self::Error> {
         unimplemented!("Not supported for simplex transmitter")
@@ -378,11 +372,11 @@ where
     }
 }
 
-impl<SPI, W, CH> SpiBus<W> for SpiDma<SPI, W, DmaRx<SPI, W, CH>>
+impl<SPI, CH, W> SpiBus<W> for SpiDma<SPI, DmaRx<SPI, W, CH>, W>
 where
     SPI: Instance,
     W: Word + DmaWord,
-    CH: ChannelRegs,
+    CH: DmaChannel,
 {
     async fn read(&mut self, words: &mut [W]) -> Result<(), Self::Error> {
         self.read_dma(words).await
@@ -413,12 +407,12 @@ where
     }
 }
 
-impl<SPI, W, TX, RX> SpiBus<W> for SpiDma<SPI, W, DmaDuplex<SPI, W, TX, RX>>
+impl<SPI, TX, RX, W> SpiBus<W> for SpiDma<SPI, DmaDuplex<SPI, W, TX, RX>, W>
 where
     SPI: Instance,
     W: Word + DmaWord,
-    TX: ChannelRegs,
-    RX: ChannelRegs,
+    TX: DmaChannel,
+    RX: DmaChannel,
 {
     async fn read(&mut self, words: &mut [W]) -> Result<(), Self::Error> {
         self.read_dma(words).await
@@ -449,13 +443,13 @@ where
     }
 }
 
-struct SpiDmaFuture<'a, SPI: Instance, W: Word, MODE> {
-    spi: &'a mut SpiDma<SPI, W, MODE>,
+struct SpiDmaFuture<'a, SPI: Instance, MODE, W: Word> {
+    spi: &'a mut SpiDma<SPI, MODE, W>,
     waker: AtomicWaker,
 }
 
-impl<'a, SPI: Instance, W: Word, MODE> SpiDmaFuture<'a, SPI, W, MODE> {
-    fn new(spi: &'a mut SpiDma<SPI, W, MODE>) -> Self {
+impl<'a, SPI: Instance, MODE, W: Word> SpiDmaFuture<'a, SPI, MODE, W> {
+    fn new(spi: &'a mut SpiDma<SPI, MODE, W>) -> Self {
         Self {
             spi,
             waker: AtomicWaker::new(),
@@ -463,9 +457,9 @@ impl<'a, SPI: Instance, W: Word, MODE> SpiDmaFuture<'a, SPI, W, MODE> {
     }
 }
 
-impl<SPI: Instance, W: Word, MODE> Unpin for SpiDmaFuture<'_, SPI, W, MODE> {}
+impl<SPI: Instance, MODE, W: Word> Unpin for SpiDmaFuture<'_, SPI, MODE, W> {}
 
-impl<SPI: Instance, W: Word, MODE> Drop for SpiDmaFuture<'_, SPI, W, MODE> {
+impl<SPI: Instance, MODE, W: Word> Drop for SpiDmaFuture<'_, SPI, MODE, W> {
     fn drop(&mut self) {
         if !self.spi.is_transaction_complete() {
             self.spi.abort_transaction();
@@ -477,7 +471,7 @@ impl<SPI: Instance, W: Word, MODE> Drop for SpiDmaFuture<'_, SPI, W, MODE> {
     }
 }
 
-impl<SPI: Instance, W: Word, MODE> Future for SpiDmaFuture<'_, SPI, W, MODE> {
+impl<SPI: Instance, MODE, W: Word> Future for SpiDmaFuture<'_, SPI, MODE, W> {
     type Output = Result<(), Error>;
 
     fn poll(
