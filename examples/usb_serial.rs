@@ -76,11 +76,9 @@ fn main() -> ! {
                 }
 
                 // Echo back in upper case
-                for c in buf[0..count].iter_mut() {
-                    if 0x61 <= *c && *c <= 0x7a {
-                        *c &= !0x20;
-                    }
-                }
+                buf[0..count]
+                    .iter_mut()
+                    .for_each(|c| *c = c.to_ascii_uppercase());
 
                 let mut write_offset = 0;
                 while write_offset < count {
