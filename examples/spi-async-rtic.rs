@@ -1,8 +1,7 @@
 #![no_main]
 #![no_std]
 
-// use defmt_rtt as _;
-use panic_probe as _;
+mod utilities;
 
 use embedded_hal_async::spi::SpiBus;
 use rtic::app;
@@ -40,11 +39,18 @@ mod app {
 
     #[init]
     fn init(ctx: init::Context) -> (Shared, Local) {
+        utilities::logger::init();
+
         let pwr = ctx.device.PWR.constrain();
         let pwrcfg = pwr.vos0().freeze();
 
         let rcc = ctx.device.RCC.constrain();
-        let ccdr = rcc.sys_ck(250.MHz()).freeze(pwrcfg, &ctx.device.SBS);
+        let ccdr = rcc
+            .sys_ck(192.MHz())
+            .pll1_q_ck(64.MHz())
+            .freeze(pwrcfg, &ctx.device.SBS);
+
+        log::info!("Starting RTIC SPI example...");
 
         // Uncomment if use SysTick as monotonic timer
         Mono::start(ctx.core.SYST, ccdr.clocks.sysclk().raw());
@@ -62,15 +68,20 @@ mod app {
         let tx_ch = channels.0;
         let rx_ch = channels.1;
 
-        let spi = ctx.device.SPI2.spi(
-            (sck, miso, mosi),
-            SpiConfig::new(spi::MODE_0),
-            1.MHz(),
-            ccdr.peripheral.SPI2,
-            &ccdr.clocks,
-        ).use_dma_duplex(tx_ch, rx_ch);
+        let spi = ctx
+            .device
+            .SPI2
+            .spi(
+                (sck, miso, mosi),
+                SpiConfig::new(spi::MODE_0),
+                1.MHz(),
+                ccdr.peripheral.SPI2,
+                &ccdr.clocks,
+            )
+            .use_dma_duplex(tx_ch, rx_ch);
 
-        tick::spawn().ok();
+        tick::spawn().unwrap();
+        spi_transfer::spawn().unwrap();
         (
             Shared {},
             Local {
@@ -78,7 +89,6 @@ mod app {
                 spi,
                 source: [0; 40],
                 dest: [0; 40],
-
             },
         )
     }
@@ -88,7 +98,7 @@ mod app {
         loop {
             ctx.local.led.toggle();
             *ctx.local.count += 1;
-            // defmt::info!("Tick {}", *ctx.local.count);
+            log::info!("Tick {}", *ctx.local.count);
             Mono::delay(1000.millis()).await;
         }
     }
@@ -96,9 +106,18 @@ mod app {
     #[task(local = [spi, count: u32 = 0, source, dest], priority = 2)]
     async fn spi_transfer(ctx: spi_transfer::Context) {
         loop {
+            log::info!("Starting SPI transfer");
             ctx.local.source.fill(*ctx.local.count as u8);
+            ctx.local.dest.fill(0);
             *ctx.local.count += 1;
-            ctx.local.spi.transfer(ctx.local.dest, ctx.local.source).await.unwrap();
+            ctx.local
+                .spi
+                .transfer(ctx.local.dest, ctx.local.source)
+                .await
+                .unwrap();
+
+            assert_eq!(ctx.local.source, ctx.local.dest);
+            log::info!("Success!");
             Mono::delay(1000.millis()).await;
         }
     }
