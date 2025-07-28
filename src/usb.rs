@@ -7,9 +7,10 @@ pub use stm32_usbd::UsbBus;
 
 use crate::gpio;
 use crate::gpio::gpioa::{PA11, PA12};
-use crate::rcc::rec;
+use crate::rcc::{rec, ResetEnable};
 use crate::stm32::{self, USB};
 use core::fmt;
+use core::marker::PhantomData;
 use stm32_usbd::UsbPeripheral;
 
 /// Type for pin that can be the "D-" pin for the USB peripheral
@@ -19,16 +20,16 @@ pub type DmPin = PA11<gpio::Alternate<10>>;
 pub type DpPin = PA12<gpio::Alternate<10>>;
 
 pub trait UsbExt {
-    fn usb(self, rec: rec::Usb, pin_dm: DmPin, pin_dp: DpPin) -> Peripheral;
+    fn usb(self, rec: rec::Usb, pin_dm: DmPin, pin_dp: DpPin) -> UsbDevice;
 }
 
 impl UsbExt for stm32::USB {
-    fn usb(self, rec: rec::Usb, pin_dm: DmPin, pin_dp: DpPin) -> Peripheral {
+    fn usb(self, rec: rec::Usb, pin_dm: DmPin, pin_dp: DpPin) -> UsbDevice {
         if let USBSEL::Disable = rec.get_kernel_clk_mux() {
             rec.kernel_clk_mux(USBSEL::Hsi48);
         };
 
-        Peripheral {
+        UsbDevice {
             _usb: self,
             pin_dm,
             pin_dp,
@@ -36,7 +37,7 @@ impl UsbExt for stm32::USB {
     }
 }
 
-pub struct Peripheral {
+pub struct UsbDevice {
     /// USB register block
     _usb: USB,
     /// Data negative pin
@@ -46,7 +47,7 @@ pub struct Peripheral {
 }
 
 #[cfg(feature = "defmt")]
-impl defmt::Format for Peripheral {
+impl defmt::Format for UsbDevice {
     fn format(&self, f: defmt::Formatter) {
         defmt::write!(
             f,
@@ -57,7 +58,7 @@ impl defmt::Format for Peripheral {
     }
 }
 
-impl fmt::Debug for Peripheral {
+impl fmt::Debug for UsbDevice {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Peripheral")
             .field("usb", &"USB")
@@ -69,10 +70,10 @@ impl fmt::Debug for Peripheral {
 
 // SAFETY: Implementation of Peripheral is thread-safe by using cricitcal sections to ensure
 // mutually exclusive access to the USB peripheral
-unsafe impl Sync for Peripheral {}
+unsafe impl Sync for UsbDevice {}
 
 // SAFETY: The peripheral has the same regiter blockout as the STM32 USBFS
-unsafe impl UsbPeripheral for Peripheral {
+unsafe impl UsbPeripheral for UsbDevice {
     const REGISTERS: *const () = USB::ptr().cast::<()>();
     const DP_PULL_UP_FEATURE: bool = true;
     const EP_MEMORY: *const () = 0x4001_6400 as _;
@@ -82,10 +83,11 @@ unsafe impl UsbPeripheral for Peripheral {
 
     fn enable() {
         cortex_m::interrupt::free(|_| {
-            let rcc = unsafe { &*stm32::RCC::ptr() };
-
             #[cfg(any(feature = "h523_h533", feature = "h56x_h573"))]
             {
+                // Safety: we are only touching the usbscr which
+                // is specific for this peripheral. This together with
+                // the critical section unsures exclusive access
                 let pwr = unsafe { &*stm32::PWR::ptr() };
 
                 // Enable USB supply level detector
@@ -98,12 +100,12 @@ unsafe impl UsbPeripheral for Peripheral {
                 pwr.usbscr().modify(|_, w| w.usb33sv().set_bit());
             }
 
-            // Enable USB peripheral
-            rcc.apb2enr().modify(|_, w| w.usben().set_bit());
-
-            // Reset USB peripheral
-            rcc.apb2rstr().modify(|_, w| w.usbrst().set_bit());
-            rcc.apb2rstr().modify(|_, w| w.usbrst().clear_bit());
+            // Reset and enable USB peripheral
+            rec::Usb {
+                _marker: PhantomData,
+            }
+            .reset()
+            .enable();
         });
     }
 
