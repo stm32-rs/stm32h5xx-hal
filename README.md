@@ -5,7 +5,7 @@
 [![docs.rs](https://docs.rs/stm32h5xx-hal/badge.svg)](https://docs.rs/stm32h5xx-hal)
 [![CI](https://github.com/stm32-rs/stm32h5xx-hal/workflows/Continuous%20integration/badge.svg)](https://github.com/stm32-rs/stm32h5xx-hal/actions)
 [![Crates.io](https://img.shields.io/crates/v/stm32h5xx-hal.svg)](https://crates.io/crates/stm32h5xx-hal)
-![Minimum rustc version](https://img.shields.io/badge/rustc-1.78.0+-yellow.svg)
+![Minimum rustc version](https://img.shields.io/badge/rustc-1.88.0+-yellow.svg)
 
 [_stm32h5xx-hal_](https://github.com/stm32-rs/stm32h5xx-hal) contains
 a hardware abstraction layer on top of the peripheral access API for
@@ -50,7 +50,7 @@ of support for peripherals is shown in the table below.
 
 ## Minimum supported Rust version
 
-The Minimum Supported Rust Version (MSRV) at the moment is **1.78.0**. Older
+The Minimum Supported Rust Version (MSRV) at the moment is **1.88.0**. Older
 versions **may** compile, especially when some features are not used in your
 application.
 
