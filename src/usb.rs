@@ -32,11 +32,17 @@ impl UsbExt for stm32::USB {
     }
 }
 
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug)]
 pub struct UsbDevice {
     /// USB register block
     _usb: USB,
+}
+
+#[cfg(feature = "defmt")]
+impl defmt::Format for UsbDevice {
+    fn format(&self, f: defmt::Formatter) {
+        defmt::write!(f, "UsbDevice {{ usb: USB }}");
+    }
 }
 
 // SAFETY: Implementation of UsbDevice is thread-safe by using cricitcal sections to ensure
