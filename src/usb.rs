@@ -9,7 +9,6 @@ use crate::gpio;
 use crate::gpio::gpioa::{PA11, PA12};
 use crate::rcc::{rec, ResetEnable};
 use crate::stm32::{self, USB};
-use core::fmt;
 use core::marker::PhantomData;
 use stm32_usbd::UsbPeripheral;
 
@@ -24,51 +23,23 @@ pub trait UsbExt {
 }
 
 impl UsbExt for stm32::USB {
-    fn usb(self, rec: rec::Usb, pin_dm: DmPin, pin_dp: DpPin) -> UsbDevice {
+    fn usb(self, rec: rec::Usb, _pin_dm: DmPin, _pin_dp: DpPin) -> UsbDevice {
         if let USBSEL::Disable = rec.get_kernel_clk_mux() {
             rec.kernel_clk_mux(USBSEL::Hsi48);
         };
 
-        UsbDevice {
-            _usb: self,
-            pin_dm,
-            pin_dp,
-        }
+        UsbDevice { _usb: self }
     }
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug)]
 pub struct UsbDevice {
     /// USB register block
     _usb: USB,
-    /// Data negative pin
-    pin_dm: DmPin,
-    /// Data positive pin
-    pin_dp: DpPin,
 }
 
-#[cfg(feature = "defmt")]
-impl defmt::Format for UsbDevice {
-    fn format(&self, f: defmt::Formatter) {
-        defmt::write!(
-            f,
-            "Peripheral {{ usb: USB, pin_dm: {}, pin_dp: {}}}",
-            self.pin_dm,
-            self.pin_dp
-        );
-    }
-}
-
-impl fmt::Debug for UsbDevice {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Peripheral")
-            .field("usb", &"USB")
-            .field("pin_dm", &self.pin_dm)
-            .field("pin_dp", &self.pin_dp)
-            .finish()
-    }
-}
-
-// SAFETY: Implementation of Peripheral is thread-safe by using cricitcal sections to ensure
+// SAFETY: Implementation of UsbDevice is thread-safe by using cricitcal sections to ensure
 // mutually exclusive access to the USB peripheral
 unsafe impl Sync for UsbDevice {}
 
