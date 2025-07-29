@@ -71,6 +71,7 @@ embedded-hal = "1.0.0"
 defmt = { version = "1.0.0", optional = true }
 paste = "1.0.15"
 log = { version = "0.4.20", optional = true}
+futures-util = { version = "0.3", default-features = false, features = ["async-await-macro"]}
 stm32-usbd = "0.8.0"
 
 [dev-dependencies]

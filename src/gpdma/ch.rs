@@ -15,7 +15,7 @@ use super::{
     DmaConfig, Error, Instance, Word,
 };
 
-trait ChannelRegs: Sealed {
+pub(super) trait ChannelRegs: Sealed {
     #[allow(unused)] // TODO: this will be used for linked-list transfers
     fn lbar(&self) -> &LBAR;
     fn fcr(&self) -> &FCR;
