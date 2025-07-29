@@ -15,7 +15,7 @@ use super::{
     DmaConfig, Error, Instance, Word,
 };
 
-trait ChannelRegs: Sealed {
+pub(super) trait ChannelRegs: Sealed {
     #[allow(unused)] // TODO: this will be used for linked-list transfers
     fn lbar(&self) -> &LBAR;
     fn fcr(&self) -> &FCR;
@@ -741,11 +741,19 @@ where
     }
 }
 
+#[cfg(feature = "gpdma-futures")]
+pub use super::future::DmaChannel;
+
 /// DmaChannel trait provides the API contract that all GPDMA channels exposed to the user
 /// implement.
+// Note: This trait is defined differently (in the `future` module) when the `gpdma-futures`
+// feature is enabled, to support async operations.
+#[cfg(not(feature = "gpdma-futures"))]
 #[allow(private_bounds)]
 pub trait DmaChannel: Channel {}
 
+#[cfg(not(feature = "gpdma-futures"))]
+#[allow(private_bounds)]
 impl<DMA, CH, const N: usize> DmaChannel for DmaChannelRef<DMA, CH, N>
 where
     DMA: Instance,
