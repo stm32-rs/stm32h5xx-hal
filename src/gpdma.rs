@@ -90,6 +90,7 @@ use embedded_dma::{ReadBuffer, Word as DmaWord, WriteBuffer};
 
 mod ch;
 pub mod config;
+mod future;
 pub mod periph;
 
 pub use ch::{
