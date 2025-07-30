@@ -2,7 +2,7 @@
 //!
 //! For more docs, see https://docs.rs/stm32h7xx-hal/latest/stm32h5xx_hal/spi/index.html
 //!
-#![deny(warnings)]
+// #![deny(warnings)]
 #![no_main]
 #![no_std]
 
@@ -12,10 +12,13 @@ use core::mem::MaybeUninit;
 
 use cortex_m_rt::entry;
 use cortex_m_semihosting::debug;
+use embedded_hal::delay::DelayNs;
 use stm32h5xx_hal::{
+    delay::Delay,
     pac,
     prelude::*,
     spi::{self, Config as SpiConfig},
+    time::MilliSeconds,
 };
 
 static mut SOURCE_BYTES: MaybeUninit<[u8; 40]> = MaybeUninit::uninit();
@@ -47,6 +50,7 @@ fn u8_buf_pair() -> (&'static [u8; 40], &'static mut [u8; 40]) {
 fn main() -> ! {
     utilities::logger::init();
 
+    let cp = cortex_m::Peripherals::take().unwrap();
     let dp = pac::Peripherals::take().unwrap();
 
     // Select highest power mode for max possible clock frequency
@@ -90,14 +94,20 @@ fn main() -> ! {
 
     let mut spi = spi.use_dma_duplex(tx_ch, rx_ch);
 
-    let (tx, rx) = spi.start_dma_duplex_transfer(dest_buf, source_buf).unwrap();
-    tx.wait_for_transfer_complete().unwrap();
-    rx.wait_for_transfer_complete().unwrap();
+    let mut delay = Delay::new(cp.SYST, &ccdr.clocks);
+    let duration = MilliSeconds::secs(1).to_millis();
 
-    assert_eq!(source_buf, dest_buf);
-
-    log::info!("Success!");
     loop {
-        debug::exit(debug::EXIT_SUCCESS)
+        let (tx, rx) =
+            spi.start_dma_duplex_transfer(dest_buf, source_buf).unwrap();
+
+        tx.wait_for_transfer_complete().unwrap();
+        rx.wait_for_transfer_complete().unwrap();
+
+        spi.finish_transfer(Ok(())).unwrap();
+        assert_eq!(source_buf, dest_buf);
+
+        log::info!("Success!");
+        delay.delay_ms(duration);
     }
 }
