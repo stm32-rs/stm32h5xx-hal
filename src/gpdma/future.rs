@@ -25,6 +25,7 @@ impl<'a, CH: DmaChannel> IntoFuture for DmaTransfer<'a, CH> {
     type IntoFuture = DmaTransferFuture<'a, CH>;
 
     fn into_future(self) -> DmaTransferFuture<'a, CH> {
+        self.enable_interrupts();
         DmaTransferFuture { transfer: self }
     }
 }
