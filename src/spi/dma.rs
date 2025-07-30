@@ -10,10 +10,14 @@ use embedded_hal_async::spi::SpiBus;
 use futures_util::join;
 use futures_util::task::AtomicWaker;
 
-use crate::gpdma::{
-    config::DmaConfig,
-    periph::{DmaDuplex, DmaRx, DmaTx, Rx, RxAddr, Tx, TxAddr},
-    DmaChannel, DmaTransfer, Error as DmaError, Word as DmaWord,
+use crate::{
+    gpdma::{
+        config::DmaConfig,
+        periph::{DmaDuplex, DmaRx, DmaTx, Rx, RxAddr, Tx, TxAddr},
+        DmaChannel, DmaTransfer, Error as DmaError, Word as DmaWord,
+    },
+    interrupt,
+    spi::CommunicationMode,
 };
 
 use super::{Error, Instance, Spi, Word};
@@ -42,9 +46,12 @@ where
     where
         CH: DmaChannel,
     {
+        assert!(self.inner.is_transmitter());
         SpiDma::new_simplex_transmitter(self, channel)
     }
 
+    /// Use DMA for receiving data only in simplex receiver mode, or in half duplex mode as a
+    /// receiver
     pub fn use_dma_rx<CH>(
         self,
         channel: CH,
@@ -52,9 +59,20 @@ where
     where
         CH: DmaChannel,
     {
+        // Using DMA for receiving data requires that the SPI is configured as a simplex receiver or
+        // in half duplex mode when receiving data only
+        // otherwise no data will be received because no clock pulses are generated
+        assert!(
+            self.inner.communication_mode()
+                == CommunicationMode::SimplexReceiver
+                || (self.inner.communication_mode()
+                    == CommunicationMode::HalfDuplex
+                    && !self.inner.is_half_duplex_transmitter())
+        );
         SpiDma::new_simplex_receiver(self, channel)
     }
 
+    /// Use DMA for full duplex transfers
     pub fn use_dma_duplex<TX, RX>(
         self,
         tx_channel: TX,
@@ -64,6 +82,9 @@ where
         TX: DmaChannel,
         RX: DmaChannel,
     {
+        assert!(
+            self.inner.communication_mode() == CommunicationMode::FullDuplex
+        );
         SpiDma::new_duplex(self, tx_channel, rx_channel)
     }
 }
@@ -73,9 +94,10 @@ pub struct SpiDma<SPI, MODE, W: Word = u8> {
     mode: MODE,
 }
 
+#[allow(private_bounds)]
 impl<SPI, MODE, W> SpiDma<SPI, MODE, W>
 where
-    SPI: Instance,
+    SPI: Instance + Waker,
     W: Word,
 {
     pub fn new(spi: Spi<SPI, W>, mode: MODE) -> Self {
@@ -199,9 +221,10 @@ where
     }
 }
 
+#[allow(private_bounds)]
 impl<SPI, MODE, W> SpiDma<SPI, MODE, W>
 where
-    SPI: Instance,
+    SPI: Instance + Waker,
     W: Word + DmaWord,
     MODE: Rx<W>,
 {
@@ -233,9 +256,10 @@ where
     }
 }
 
+#[allow(private_bounds)]
 impl<SPI, MODE, W> SpiDma<SPI, MODE, W>
 where
-    SPI: Instance,
+    SPI: Instance + Waker,
     W: Word + DmaWord,
     MODE: Tx<W>,
 {
@@ -266,9 +290,10 @@ where
     }
 }
 
+#[allow(private_bounds)]
 impl<SPI, TX, RX, W> SpiDma<SPI, DmaDuplex<SPI, W, TX, RX>, W>
 where
-    SPI: Instance,
+    SPI: Instance + Waker,
     W: Word + DmaWord,
     TX: DmaChannel,
     RX: DmaChannel,
@@ -278,6 +303,12 @@ where
         read: &'a mut [W],
         write: &'a [W],
     ) -> Result<(DmaTransfer<'a, TX>, DmaTransfer<'a, RX>), Error> {
+        assert_eq!(
+            read.len(),
+            write.len(),
+            "Read and write buffers must have the same length"
+        );
+
         let tx_config = DmaConfig::new().with_request(SPI::tx_dma_request());
         let rx_config = DmaConfig::new().with_request(SPI::rx_dma_request());
 
@@ -332,7 +363,7 @@ where
 
 impl<SPI, CH, W> SpiBus<W> for SpiDma<SPI, DmaTx<SPI, W, CH>, W>
 where
-    SPI: Instance,
+    SPI: Instance + Waker,
     W: Word + DmaWord,
     CH: DmaChannel,
 {
@@ -367,7 +398,7 @@ where
 
 impl<SPI, CH, W> SpiBus<W> for SpiDma<SPI, DmaRx<SPI, W, CH>, W>
 where
-    SPI: Instance,
+    SPI: Instance + Waker,
     W: Word + DmaWord,
     CH: DmaChannel,
 {
@@ -402,7 +433,7 @@ where
 
 impl<SPI, TX, RX, W> SpiBus<W> for SpiDma<SPI, DmaDuplex<SPI, W, TX, RX>, W>
 where
-    SPI: Instance,
+    SPI: Instance + Waker,
     W: Word + DmaWord,
     TX: DmaChannel,
     RX: DmaChannel,
@@ -438,15 +469,12 @@ where
 
 struct SpiDmaFuture<'a, SPI: Instance, MODE, W: Word> {
     spi: &'a mut SpiDma<SPI, MODE, W>,
-    waker: AtomicWaker,
 }
 
 impl<'a, SPI: Instance, MODE, W: Word> SpiDmaFuture<'a, SPI, MODE, W> {
     fn new(spi: &'a mut SpiDma<SPI, MODE, W>) -> Self {
-        Self {
-            spi,
-            waker: AtomicWaker::new(),
-        }
+        spi.inner.enable_dma_transfer_interrupts();
+        Self { spi }
     }
 }
 
@@ -454,30 +482,71 @@ impl<SPI: Instance, MODE, W: Word> Unpin for SpiDmaFuture<'_, SPI, MODE, W> {}
 
 impl<SPI: Instance, MODE, W: Word> Drop for SpiDmaFuture<'_, SPI, MODE, W> {
     fn drop(&mut self) {
-        if !self.spi.is_transaction_complete() {
-            self.spi.abort_transaction();
-        } else if self.spi.inner.is_enabled() {
-            self.spi.disable();
-        } else {
-            // do nothing if the transaction is already complete
-        }
+        self.spi.disable();
     }
 }
 
-impl<SPI: Instance, MODE, W: Word> Future for SpiDmaFuture<'_, SPI, MODE, W> {
+impl<SPI: Instance + Waker, MODE, W: Word> Future
+    for SpiDmaFuture<'_, SPI, MODE, W>
+{
     type Output = Result<(), Error>;
 
     fn poll(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Self::Output> {
-        self.waker.register(cx.waker());
+        SPI::waker().register(cx.waker());
 
         if self.spi.is_transaction_complete() {
-            self.spi.disable();
             Poll::Ready(Ok(()))
         } else {
             Poll::Pending
         }
     }
+}
+
+trait Waker {
+    fn waker() -> &'static AtomicWaker;
+}
+
+macro_rules! spi_dma_irq {
+    ($SPI:ident) => {
+        paste::item! {
+            static [<$SPI _WAKER>]: AtomicWaker = AtomicWaker::new();
+
+            impl Waker for $SPI {
+                #[inline(always)]
+                fn waker() -> &'static AtomicWaker {
+                    &[<$SPI _WAKER>]
+                }
+            }
+
+            #[interrupt]
+            fn $SPI() {
+                let spi = unsafe { &*$SPI::ptr() };
+                unsafe { spi.ier().write_with_zero(|w| w); };
+                $SPI::waker().wake();
+            }
+        }
+    };
+}
+use crate::pac::{SPI1, SPI2, SPI3};
+
+spi_dma_irq!(SPI1);
+spi_dma_irq!(SPI2);
+spi_dma_irq!(SPI3);
+
+#[cfg(feature = "rm0481")]
+mod rm0481 {
+    use super::*;
+    use crate::pac::SPI4;
+    spi_dma_irq!(SPI4);
+}
+
+#[cfg(feature = "h56x_h573")]
+mod h56x_h573 {
+    use super::*;
+    use crate::pac::{SPI5, SPI6};
+    spi_dma_irq!(SPI5);
+    spi_dma_irq!(SPI6);
 }
