@@ -19,7 +19,7 @@ systick_monotonic!(Mono, 1000);
 #[app(device = pac, dispatchers = [USART1, USART2], peripherals = true)]
 mod app {
 
-    use stm32h5::stm32h503::GPDMA1;
+    use stm32h5::stm32h503::{GPDMA1, NVIC};
 
     use super::*;
 
@@ -79,6 +79,11 @@ mod app {
                 &ccdr.clocks,
             )
             .use_dma_duplex(tx_ch, rx_ch);
+
+        unsafe {
+            NVIC::unmask(pac::interrupt::GPDMA1_CH0);
+            NVIC::unmask(pac::interrupt::GPDMA1_CH1);
+        };
 
         tick::spawn().unwrap();
         spi_transfer::spawn().unwrap();
