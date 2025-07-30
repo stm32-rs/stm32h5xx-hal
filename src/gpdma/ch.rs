@@ -1,5 +1,7 @@
 use core::{marker::PhantomData, ops::Deref};
 
+use futures_util::task::AtomicWaker;
+
 use crate::stm32::gpdma1::{
     self,
     ch::{CR, DAR, FCR, LBAR, SAR, SR, TR1, TR2},
@@ -12,6 +14,7 @@ use super::{
         AddressingMode, AhbPort, HardwareRequest, PeripheralRequest,
         PeripheralSource, Priority, TransferDirection, TransferType,
     },
+    future::ChannelWaker,
     DmaConfig, Error, Instance, Word,
 };
 
@@ -536,6 +539,8 @@ pub(super) trait Channel {
     /// Disable transfer interrupts for the channel. It is expected that this will be called from
     /// an interrupt handler after a transfer is completed.
     fn disable_transfer_interrupts(&self);
+
+    fn waker(&self) -> &'static AtomicWaker;
 }
 
 impl<DMA, CH, const N: usize> Channel for DmaChannelRef<DMA, CH, N>
@@ -738,6 +743,10 @@ where
         self.cr().modify(|_, w| {
             w.tcie().disabled().dteie().disabled().useie().disabled()
         });
+    }
+
+    fn waker(&self) -> &'static AtomicWaker {
+        self.ch.waker()
     }
 }
 

@@ -102,6 +102,7 @@ use config::{
     PeripheralSource, PeripheralToMemory, PeripheralToPeripheral,
     PeripheralToPeripheralDirection, TransferDirection, TransferType,
 };
+use future::InstanceWaker;
 
 /// Supported word types for the STM32H5 GPDMA implementation.
 ///
@@ -146,7 +147,10 @@ impl<DMA: Instance> GpdmaExt<DMA> for DMA {
     }
 }
 
-pub trait Instance: Sealed + Deref<Target = gpdma1::RegisterBlock> {
+#[allow(private_bounds)]
+pub trait Instance:
+    Sealed + InstanceWaker + Deref<Target = gpdma1::RegisterBlock>
+{
     type Rec: ResetEnable;
 
     fn ptr() -> *const gpdma1::RegisterBlock;
