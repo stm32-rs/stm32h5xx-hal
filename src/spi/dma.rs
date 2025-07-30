@@ -1,5 +1,5 @@
 use core::{
-    future::Future,
+    future::{Future, IntoFuture},
     ops::{Deref, DerefMut},
     pin::Pin,
     task::{Context, Poll},
@@ -208,8 +208,7 @@ where
     pub fn start_dma_read<'a>(
         &'a mut self,
         words: &'a mut [W],
-    ) -> Result<DmaTransfer<'a, impl DmaChannel + use<'a, SPI, W, MODE>>, Error>
-    {
+    ) -> Result<DmaTransfer<'a, <MODE as Rx<W>>::CH>, Error> {
         let config = DmaConfig::new().with_request(SPI::rx_dma_request());
 
         self.spi.inner.set_transfer_word_count(words.len() as u16);
@@ -229,7 +228,7 @@ where
     }
 
     async fn read_dma(&mut self, words: &mut [W]) -> Result<(), Error> {
-        let result = self.start_dma_read(words)?.to_async().await;
+        let result = self.start_dma_read(words)?.await;
         self.finish_transfer_async(result).await
     }
 }
@@ -243,8 +242,7 @@ where
     pub fn start_dma_write<'a>(
         &'a mut self,
         words: &'a [W],
-    ) -> Result<DmaTransfer<'a, impl DmaChannel + use<'a, SPI, W, MODE>>, Error>
-    {
+    ) -> Result<DmaTransfer<'a, <MODE as Tx<W>>::CH>, Error> {
         let config = DmaConfig::new().with_request(SPI::tx_dma_request());
 
         self.inner.set_transfer_word_count(words.len() as u16);
@@ -263,28 +261,23 @@ where
     }
 
     async fn write_dma(&mut self, words: &[W]) -> Result<(), Error> {
-        let result = self.start_dma_write(words)?.to_async().await;
+        let result = self.start_dma_write(words)?.await;
         self.finish_transfer_async(result).await
     }
 }
 
-impl<SPI, MODE, W> SpiDma<SPI, MODE, W>
+impl<SPI, TX, RX, W> SpiDma<SPI, DmaDuplex<SPI, W, TX, RX>, W>
 where
     SPI: Instance,
     W: Word + DmaWord,
-    MODE: Tx<W> + Rx<W>,
+    TX: DmaChannel,
+    RX: DmaChannel,
 {
     pub fn start_dma_duplex_transfer<'a>(
         &'a mut self,
         read: &'a mut [W],
         write: &'a [W],
-    ) -> Result<
-        (
-            DmaTransfer<'a, impl DmaChannel + use<'a, SPI, W, MODE>>,
-            DmaTransfer<'a, impl DmaChannel + use<'a, SPI, W, MODE>>,
-        ),
-        Error,
-    > {
+    ) -> Result<(DmaTransfer<'a, TX>, DmaTransfer<'a, RX>), Error> {
         let tx_config = DmaConfig::new().with_request(SPI::tx_dma_request());
         let rx_config = DmaConfig::new().with_request(SPI::rx_dma_request());
 
@@ -311,7 +304,7 @@ where
         write: &[W],
     ) -> Result<(), Error> {
         let (tx, rx) = self.start_dma_duplex_transfer(read, write)?;
-        let (tx, rx) = (tx.to_async(), rx.to_async());
+        let (tx, rx) = (tx.into_future(), rx.into_future());
         let results = join!(tx, rx);
         let result = results.0.and(results.1);
 
