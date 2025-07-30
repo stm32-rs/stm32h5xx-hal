@@ -520,6 +520,19 @@ impl<SPI: Instance, W: Word> Inner<SPI, W> {
         self.spi.cr2().modify(|_, w| w.tsize().set(0));
     }
 
+    fn enable_dma_transfer_interrupts(&self) {
+        self.spi.ier().modify(|_, w| {
+            w.eotie()
+                .enabled()
+                .udrie() // Underrun
+                .enabled()
+                .ovrie() // Overrun
+                .enabled()
+                .modfie() // Mode fault
+                .enabled()
+        });
+    }
+
     /// Disable SPI
     fn disable(&mut self) {
         self.spi.cr1().modify(|_, w| w.spe().disabled());
@@ -901,7 +914,6 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
     /// This must always be called when all data has been sent to
     /// properly terminate the transaction and reset the SPI peripheral.
     fn end_transaction(&mut self) {
-        // Result is only () or WouldBlock. Discard result.
         while !self.end_transaction_if_done() {}
     }
 
