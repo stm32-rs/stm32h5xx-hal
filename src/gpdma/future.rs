@@ -2,6 +2,7 @@ use core::{
     future::{Future, IntoFuture},
     ops::{Deref, DerefMut},
     pin::Pin,
+    sync::atomic::{fence, Ordering},
     task::{Context, Poll},
 };
 
@@ -59,14 +60,15 @@ where
     CH: DmaChannel,
 {
     fn drop(&mut self) {
-        match self.abort() {
-            Ok(()) => {}
-            Err(_error) => {
-                #[cfg(feature = "log")]
-                log::error!("Error aborting DMA transfer: {_error:?}");
-            }
+        if self.is_running() {
+            self.channel.abort();
         }
+
         self.disable_interrupts();
+
+        // Preserve the instruction and bus sequence of the preceding operation and
+        // the subsequent buffer access.
+        fence(Ordering::SeqCst);
     }
 }
 
@@ -80,7 +82,7 @@ where
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.channel.waker().register(cx.waker());
-        if self.is_transfer_complete()? {
+        if self.channel.check_transfer_complete()? {
             Poll::Ready(Ok(()))
         } else {
             Poll::Pending
@@ -98,8 +100,8 @@ where
     #[inline(always)]
     fn handle_interrupt() {
         let ch = Self::new();
-        ch.waker().wake();
         ch.disable_transfer_interrupts();
+        ch.waker().wake();
     }
 }
 
