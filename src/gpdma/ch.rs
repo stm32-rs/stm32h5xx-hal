@@ -1,5 +1,7 @@
 use core::{marker::PhantomData, ops::Deref};
 
+use futures_util::task::AtomicWaker;
+
 use crate::stm32::gpdma1::{
     self,
     ch::{CR, DAR, FCR, LBAR, SAR, SR, TR1, TR2},
@@ -12,6 +14,7 @@ use super::{
         AddressingMode, AhbPort, HardwareRequest, PeripheralRequest,
         PeripheralSource, Priority, TransferDirection, TransferType,
     },
+    future::ChannelWaker,
     DmaConfig, Error, Instance, Word,
 };
 
@@ -738,6 +741,10 @@ where
         self.cr().modify(|_, w| {
             w.tcie().disabled().dteie().disabled().useie().disabled()
         });
+    }
+
+    fn waker(&self) -> &'static AtomicWaker {
+        self.ch.waker()
     }
 }
 

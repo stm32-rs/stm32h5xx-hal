@@ -20,10 +20,10 @@ use super::{
 };
 
 #[allow(private_bounds)]
-impl<'a, CH: DmaChannel + ChannelWaker> IntoFuture for DmaTransfer<'a, CH> {
+impl<'a, CH: DmaChannel> IntoFuture for DmaTransfer<'a, CH> {
     type Output = Result<(), Error>;
     type IntoFuture = DmaTransferFuture<'a, CH>;
-    
+
     fn into_future(self) -> DmaTransferFuture<'a, CH> {
         DmaTransferFuture { transfer: self }
     }
@@ -73,7 +73,7 @@ impl<'a, CH: DmaChannel> Unpin for DmaTransferFuture<'a, CH> {}
 
 impl<'a, CH> Future for DmaTransferFuture<'a, CH>
 where
-    CH: DmaChannel + ChannelWaker,
+    CH: DmaChannel,
 {
     type Output = Result<(), Error>;
 
@@ -92,7 +92,6 @@ impl<DMA, CH, const N: usize> DmaChannelImpl<DmaChannelRef<DMA, CH, N>>
 where
     DMA: Instance,
     CH: ChannelRegs,
-    Self: ChannelWaker,
     DmaChannelRef<DMA, CH, N>: ChannelRegs,
 {
     #[inline(always)]
@@ -114,8 +113,24 @@ macro_rules! gpdma_irq {
     };
 }
 
-trait ChannelWaker {
+pub(super) trait InstanceWaker {
+    fn waker(idx: usize) -> &'static AtomicWaker;
+}
+
+pub(super) trait ChannelWaker {
+    /// Returns a reference to the AtomicWaker for the channel.
     fn waker(&self) -> &'static AtomicWaker;
+}
+
+impl<DMA, CH, const N: usize> ChannelWaker for DmaChannelRef<DMA, CH, N>
+where
+    DMA: Instance,
+    CH: ChannelRegs,
+{
+    #[inline(always)]
+    fn waker(&self) -> &'static AtomicWaker {
+        DMA::waker(N)
+    }
 }
 
 mod gpdma1 {
@@ -124,11 +139,10 @@ mod gpdma1 {
     static WAKERS_GPDMA1: [AtomicWaker; 8] = [const { AtomicWaker::new() }; 8];
 
     #[allow(private_bounds)]
-    impl<CH: ChannelRegs, const N: usize> ChannelWaker
-        for DmaChannelImpl<DmaChannelRef<GPDMA1, CH, N>>
-    {
-        fn waker(&self) -> &'static AtomicWaker {
-            &WAKERS_GPDMA1[N]
+    impl InstanceWaker for GPDMA1 {
+        #[inline(always)]
+        fn waker(idx: usize) -> &'static AtomicWaker {
+            &WAKERS_GPDMA1[idx]
         }
     }
 
@@ -148,11 +162,10 @@ mod gpdma2 {
     static WAKERS_GPDMA2: [AtomicWaker; 8] = [const { AtomicWaker::new() }; 8];
 
     #[allow(private_bounds)]
-    impl<CH: ChannelRegs, const N: usize> ChannelWaker
-        for DmaChannelImpl<DmaChannelRef<GPDMA2, CH, N>>
-    {
-        fn waker(&self) -> &'static AtomicWaker {
-            &WAKERS_GPDMA2[N]
+    impl InstanceWaker for GPDMA2 {
+        #[inline(always)]
+        fn waker(idx: usize) -> &'static AtomicWaker {
+            &WAKERS_GPDMA2[idx]
         }
     }
 
