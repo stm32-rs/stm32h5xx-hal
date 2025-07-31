@@ -18,6 +18,7 @@ use super::Word;
 /// Represents the options available for the padding and alignment step in the data transformation
 /// pipeline
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub(crate) enum PaddingAlignmentMode {
     #[default]
     None,
@@ -100,6 +101,7 @@ pub trait DestinationByteExchange {
 /// source and destination word sizes, so the builder can be created without specifying the types
 /// explicitly.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DataTransformBuilder<S, D> {
     _source_type: PhantomData<S>,
     _destination_type: PhantomData<D>,
@@ -301,6 +303,7 @@ impl<S: Word> DestinationByteExchange for DataTransformBuilder<S, u32> {
 /// DataTransform represents the configuration of the data transformation pipeline as produced
 /// by the above builder structs.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DataTransform {
     pub(crate) source_byte_exchange: bool,
     pub(crate) padding_alignment: PaddingAlignmentMode,

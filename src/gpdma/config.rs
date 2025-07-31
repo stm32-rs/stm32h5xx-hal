@@ -232,6 +232,7 @@ impl<T> PeripheralSource for PeripheralToPeripheral<T> {
 
 /// Marker struct for memory-to-memory transfers (no special options)
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct MemoryToMemory;
 
 impl crate::Sealed for MemoryToMemory {}
