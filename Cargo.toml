@@ -50,6 +50,11 @@ stm32h562 = ["stm32h5/stm32h562", "device-selected", "rm0481", "h56x_h573"]
 stm32h563 = ["stm32h5/stm32h563", "device-selected", "rm0481", "h56x_h573", "sdmmc2", "ethernet"]
 stm32h573 = ["stm32h5/stm32h573", "device-selected", "rm0481", "h56x_h573", "otfdec", "sdmmc2", "ethernet"]
 
+# Flags for async APIs
+futures = ["dep:futures-util"]
+gpdma-futures = ["futures"]
+async = ["gpdma-futures"]
+
 # Flags for examples
 log = ["dep:log"]
 log-itm = ["log"]
@@ -71,7 +76,7 @@ embedded-hal = "1.0.0"
 defmt = { version = "1.0.0", optional = true }
 paste = "1.0.15"
 log = { version = "0.4.20", optional = true}
-futures-util = { version = "0.3", default-features = false, features = ["async-await-macro"]}
+futures-util = { version = "0.3", default-features = false, features = ["async-await-macro"], optional = true}
 stm32-usbd = "0.8.0"
 
 [dev-dependencies]

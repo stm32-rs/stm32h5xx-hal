@@ -1,7 +1,5 @@
 use core::{marker::PhantomData, ops::Deref};
 
-use futures_util::task::AtomicWaker;
-
 use crate::stm32::gpdma1::{
     self,
     ch::{CR, DAR, FCR, LBAR, SAR, SR, TR1, TR2},
@@ -14,7 +12,6 @@ use super::{
         AddressingMode, AhbPort, HardwareRequest, PeripheralRequest,
         PeripheralSource, Priority, TransferDirection, TransferType,
     },
-    future::ChannelWaker,
     DmaConfig, Error, Instance, Word,
 };
 
@@ -742,17 +739,19 @@ where
             w.tcie().disabled().dteie().disabled().useie().disabled()
         });
     }
-
-    fn waker(&self) -> &'static AtomicWaker {
-        self.ch.waker()
-    }
 }
+
+#[cfg(feature = "gpdma-futures")]
+pub use super::future::DmaChannel;
 
 /// DmaChannel trait provides the API contract that all GPDMA channels exposed to the user
 /// implement.
+#[cfg(not(feature = "gpdma-futures"))]
 #[allow(private_bounds)]
 pub trait DmaChannel: Channel {}
 
+#[cfg(not(feature = "gpdma-futures"))]
+#[allow(private_bounds)]
 impl<DMA, CH, const N: usize> DmaChannel for DmaChannelRef<DMA, CH, N>
 where
     DMA: Instance,
