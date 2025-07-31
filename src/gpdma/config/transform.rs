@@ -218,7 +218,7 @@ impl TruncationAlignment for DataTransformBuilder<u32, u8> {
     /// Keep the least significant 8-bits and truncate the rest (default)
     ///
     /// ie: B7B6B5B4,B3B2B1B0 -> B4,B0
-    fn right_align_left_truncate(mut self) -> DataTransformBuilder<u32, u8> {
+    fn right_align_left_truncate(mut self) -> Self {
         self.transform.padding_alignment =
             PaddingAlignmentMode::RightAlignedLeftTruncated;
         self
@@ -227,7 +227,7 @@ impl TruncationAlignment for DataTransformBuilder<u32, u8> {
     /// Keep the most significant 8-bits and truncate the rest
     ///
     /// i.e: B7B6B5B4,B3B2B1B0 -> B7,B3
-    fn left_align_right_truncate(mut self) -> DataTransformBuilder<u32, u8> {
+    fn left_align_right_truncate(mut self) -> Self {
         self.transform.padding_alignment =
             PaddingAlignmentMode::LeftAlignedRightTruncated;
         self
@@ -238,7 +238,7 @@ impl TruncationAlignment for DataTransformBuilder<u32, u8> {
     /// the number of word or half-words in the source buffer.
     ///
     /// ie: B7B6B5B4,B3B2B1B0 -> B7,B6,B5,B4,B3,B2,B1,B0
-    fn unpack(mut self) -> DataTransformBuilder<u32, u8> {
+    fn unpack(mut self) -> Self {
         self.transform.padding_alignment = PaddingAlignmentMode::Unpacked;
         self
     }

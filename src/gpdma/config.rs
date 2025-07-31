@@ -8,6 +8,7 @@ use transform::*;
 /// PeripheralRequests is used for peripheral-to-peripheral transfers to indicate which side of the
 /// transfer is driving the request (ie. which has the hardware request assigned)
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum PeripheralRequest {
     SourceRequest,
     DestinationRequest,
@@ -15,6 +16,7 @@ pub enum PeripheralRequest {
 
 /// The TransferDirection represents the available options for transfer types
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TransferDirection {
     MemoryToMemory,
     MemoryToPeripheral,
@@ -25,6 +27,7 @@ pub enum TransferDirection {
 /// Addressing mode represents whether the source or destination address is contiguously incremented
 /// or fixed during a transfer
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum AddressingMode {
     #[default]
     ContiguouslyIncremented,
@@ -62,6 +65,7 @@ pub trait PeripheralSource {
 
 /// Represents the options specifically available for peripheral-to-memory transfers
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct PeripheralToMemory {
     request: u8,
     block_request: bool,
@@ -108,6 +112,7 @@ impl PeripheralSource for PeripheralToMemory {
 
 /// Represents the options specifically available for memory-to-peripheral transfers
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct MemoryToPeripheral {
     request: u8,
     block_request: bool,
@@ -143,11 +148,13 @@ impl HardwareRequest for MemoryToPeripheral {
 
 /// Marker struct to indicate that the source peripheral drives the request via its request line.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct SourceRequest;
 
 /// Marker struct to indicate that the destination peripheral drives the request via its request
 /// line.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DestinationRequest;
 
 /// Indicates which peripheral in a peripheral-to-peripheral transfer is driving the request line
@@ -171,6 +178,7 @@ impl PeripheralToPeripheralDirection for DestinationRequest {
 
 /// Represents the options specifically available for peripheral-to-peripheral transfers
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct PeripheralToPeripheral<T> {
     _peripheral_request: PhantomData<T>,
     request: u8,
@@ -235,6 +243,7 @@ impl TransferType for MemoryToMemory {
 /// Priority of the transfer. Used by the GPDMA channel arbitration to determine which transfer
 /// to service.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Priority {
     LowPriorityLowWeight = 0,
     #[default]
@@ -244,6 +253,7 @@ pub enum Priority {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Continuation {
     #[default]
     Direct,
@@ -251,6 +261,7 @@ pub enum Continuation {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum AhbPort {
     #[default]
     Port0 = 0,
@@ -261,6 +272,7 @@ const MAX_BURST_LEN: u8 = 64;
 
 /// Configuration options for a DMA transfer
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DmaConfig<T, S, D> {
     _src_word: PhantomData<S>,
     _dest_word: PhantomData<D>,

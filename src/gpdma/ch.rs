@@ -196,6 +196,7 @@ where
         self.cr().modify(|_, w| w.susp().not_suspended());
     }
 
+    /// Clear all event flags in the FCR register.
     fn clear_all_event_flags(&self) {
         self.fcr().write(|w| {
             w.tcf()
@@ -216,25 +217,28 @@ where
     }
 
     #[inline(always)]
+    /// Checks if the specified transfer event has triggered or if an error has occurred. If an
+    /// error has occurred, it is returned. If the event has triggered, `Ok(true)` is returned.
+    /// Otherwise, if the event has not triggered, `Ok(false)` is returned.
     fn check_transfer_event(
         &self,
         event: TransferEvent,
     ) -> Result<bool, Error> {
         let sr = self.sr().read();
-        check_error!(sr).inspect_err(|_| self.clear_all_event_flags())?;
+        check_error!(sr)?;
         let triggered = match event {
             TransferEvent::TransferComplete => sr.tcf().is_trigger(),
             TransferEvent::HalfTransferComplete => sr.htf().is_trigger(),
         };
 
-        if triggered {
-            // Clear the event flag if it has been triggered
-            self.fcr().write(|w| match event {
-                TransferEvent::TransferComplete => w.tcf().clear(),
-                TransferEvent::HalfTransferComplete => w.htf().clear(),
-            });
-        }
         Ok(triggered)
+    }
+
+    fn clear_transfer_event_flag(&self, event: TransferEvent) {
+        self.fcr().write(|w| match event {
+            TransferEvent::TransferComplete => w.tcf().clear(),
+            TransferEvent::HalfTransferComplete => w.htf().clear(),
+        });
     }
 
     // TODO: Remove clippy allow when FIFO use is implemented
@@ -482,9 +486,11 @@ pub(super) trait Channel {
 
     /// Blocks waiting for a transfer to complete. Reports any errors that occur during a transfer.
     fn wait_for_transfer_complete(&self) -> Result<(), Error>;
+
     /// Blocks waiting for a half transfer event to trigger. Reports any errors that occur during a
     /// transfer.
     fn wait_for_half_transfer_complete(&self) -> Result<(), Error>;
+
     /// Apply a transfer configuration to the channel
     fn apply_config<T: TransferType, S: Word, D: Word>(
         &self,
@@ -522,8 +528,13 @@ pub(super) trait Channel {
     /// must be aligned with the source data width.
     fn set_transfer_size_bytes(&self, size: usize);
 
+    /// Enable transfer interrupts for the channel. This enables the transfer complete,
+    /// half-transfer complete, data transfer error and user setting error interrupts. This is
+    /// useful for starting a transfer that will be monitored by an interrupt handler.
     fn enable_transfer_interrupts(&self);
 
+    /// Disable transfer interrupts for the channel. It is expected that this will be called from
+    /// an interrupt handler after a transfer is completed.
     fn disable_transfer_interrupts(&self);
 }
 
@@ -533,19 +544,16 @@ where
     CH: ChannelRegs,
     Self: Deref<Target = CH>,
 {
-    /// Enable a transfer on the channel
     #[inline(always)]
     fn enable(&self) {
         self.cr().modify(|_, w| w.en().enabled());
     }
 
-    /// Checks whether the channel is suspended
     #[inline(always)]
     fn is_suspended(&self) -> bool {
         self.sr().read().suspf().bit_is_set()
     }
 
-    /// Initiates the suspension of a transfer
     fn initiate_suspend(&self) {
         if self.is_suspended() {
             return;
@@ -553,26 +561,19 @@ where
         self.suspend();
     }
 
-    /// Resume transfer
     #[inline(always)]
     fn initiate_resume(&self) {
         self.resume();
     }
 
-    /// Checks whether the channel transfer is complete. If the channel indicates an error occurred,
-    /// during the transaction an `Error`` is returned.
     fn check_transfer_complete(&self) -> Result<bool, Error> {
         self.check_transfer_event(TransferEvent::TransferComplete)
     }
 
-    /// Checks whether the channel half transfer complete event has triggered. If the channel
-    /// indicates an error occurred, during the transaction an `Error`` is returned.
     fn check_half_transfer_complete(&self) -> Result<bool, Error> {
         self.check_transfer_event(TransferEvent::HalfTransferComplete)
     }
 
-    /// Checks whether the channel transfer has started (has transitioned out of the idle state, or
-    /// the transfer complete event has already triggered if it is idle)
     fn check_transfer_started(&self) -> Result<bool, Error> {
         // TODO: Resolve multiple status register reads
         match self.check_idle() {
@@ -584,34 +585,27 @@ where
         }
     }
 
-    /// Return whether or not a transfer is in progress on the channel.
     #[inline(always)]
     fn is_running(&self) -> bool {
         !self.is_idle()
     }
 
-    /// Reset the channel registers and clear status flags so the channel can be reused.
     fn reset_channel(&self) {
         self.reset();
         self.clear_all_event_flags();
     }
 
-    /// Suspend the transfer and blocks until it has been suspended. Reports any that occur while
-    /// waiting for the transfer to suspend.
     fn suspend_transfer(&self) {
         self.initiate_suspend();
         while !self.is_suspended() {}
     }
 
-    /// Resumes a suspended transfer and blocks until the channel transitions out of the idle state
-    /// Reports any errors that occur resuming the transfer.
     fn resume_transfer(&self) -> Result<(), Error> {
         self.initiate_resume();
         while !self.check_transfer_started()? {}
         Ok(())
     }
 
-    /// Aborts an operation by suspending the transfer and resetting the channel.
     fn abort(&self) {
         if !self.is_idle() {
             self.suspend_transfer();
@@ -620,35 +614,49 @@ where
         self.reset_channel();
     }
 
-    /// Blocks waiting for a transfer to be started (or for it to be idle and complete). Reports any
-    /// errors that occur while waiting for the transfer to start.
     fn wait_for_transfer_started(&self) -> Result<(), Error> {
-        while !self.check_transfer_started()? {}
+        while !self.check_transfer_started().inspect_err(|_| {
+            self.clear_all_event_flags();
+        })? {}
         Ok(())
     }
 
-    /// Blocks waiting for a transfer to complete. Reports any errors that occur during a transfer.
     fn wait_for_transfer_complete(&self) -> Result<(), Error> {
-        if !self.is_running() {
-            return Ok(());
+        loop {
+            match self.check_transfer_complete() {
+                Ok(true) => {
+                    self.clear_transfer_event_flag(
+                        TransferEvent::TransferComplete,
+                    );
+                    return Ok(());
+                }
+                Ok(false) => continue,
+                Err(error) => {
+                    self.clear_all_event_flags();
+                    return Err(error);
+                }
+            }
         }
-
-        while !self.check_transfer_complete()? {}
-        Ok(())
     }
 
-    /// Blocks waiting for a half transfer event to trigger. Reports any errors that occur during a
-    /// transfer.
     fn wait_for_half_transfer_complete(&self) -> Result<(), Error> {
-        if !self.is_running() {
-            return Ok(());
+        loop {
+            match self.check_half_transfer_complete() {
+                Ok(true) => {
+                    self.clear_transfer_event_flag(
+                        TransferEvent::HalfTransferComplete,
+                    );
+                    return Ok(());
+                }
+                Ok(false) => continue,
+                Err(error) => {
+                    self.clear_all_event_flags();
+                    return Err(error);
+                }
+            }
         }
-
-        while !self.check_half_transfer_complete()? {}
-        Ok(())
     }
 
-    /// Apply a transfer configuration to the channel
     fn apply_config<T: TransferType, S: Word, D: Word>(
         &self,
         config: DmaConfig<T, S, D>,
@@ -674,8 +682,6 @@ where
         }
     }
 
-    /// Apply hardware request configuration to the channel. Not relevant to memory-to-memory
-    /// transfers.
     fn configure_hardware_request<T: HardwareRequest, S: Word, D: Word>(
         &self,
         config: DmaConfig<T, S, D>,
@@ -684,8 +690,6 @@ where
         self.set_request_line(config.transfer_type.request());
     }
 
-    /// Apply peripheral flow control configuration for transactions where a peripheral is the
-    /// source
     fn configure_peripheral_flow_control<
         T: PeripheralSource,
         S: Word,
@@ -699,7 +703,6 @@ where
         );
     }
 
-    /// Apply a data transform to the channel transfer
     fn apply_data_transform(&self, data_transform: DataTransform) {
         self.set_source_byte_exchange(data_transform.source_byte_exchange);
         self.set_padding_alignment_mode(data_transform.padding_alignment);
@@ -709,36 +712,27 @@ where
         self.set_destination_byte_exchange(data_transform.dest_byte_exchange);
     }
 
-    /// Set the source address. This sets the source address and data width.
     fn set_source<W: Word>(&self, ptr: *const W) {
         self.set_source_address(ptr as u32);
         self.set_source_data_width(core::mem::size_of::<W>());
     }
 
-    /// Set the destination address. This sets the destination address and data width
     fn set_destination<W: Word>(&self, ptr: *mut W) {
         self.set_destination_address(ptr as u32);
         self.set_destination_data_width(core::mem::size_of::<W>());
     }
 
-    /// Set the transfer size in bytes (not words!). Size must be aligned with destination width if
-    /// source width is greater than destination width and packing mode is used. Otherwise the size
-    /// must be aligned with the source data width.
     fn set_transfer_size_bytes(&self, size: usize) {
         self.set_block_size(size as u16);
     }
 
-    /// Enable transfer interrupts for the channel. This enables the transfer complete,
-    /// half-transfer complete, data transfer error and user setting error interrupts. This is
-    /// useful for starting a transfer that will be monitored by an interrupt handler.
     #[inline(always)]
     fn enable_transfer_interrupts(&self) {
         self.cr().modify(|_, w| {
             w.tcie().enabled().dteie().enabled().useie().enabled()
         });
     }
-    /// Disable transfer interrupts for the channel. It is expected that this will be called from
-    /// an interrupt handler after a transfer is completed.
+
     #[inline(always)]
     fn disable_transfer_interrupts(&self) {
         self.cr().modify(|_, w| {

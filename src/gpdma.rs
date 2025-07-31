@@ -493,37 +493,57 @@ impl<'a, CH: DmaChannel> DmaTransfer<'a, CH> {
 
     /// Blocks waiting for a transfer to complete. Returns an error if one occurred during the
     /// transfer.
-    pub fn wait_for_transfer_complete(&self) -> Result<(), Error> {
+    pub fn wait_for_transfer_complete(self) -> Result<(), Error> {
         let result = self.channel.wait_for_transfer_complete();
         // Preserve the instruction and bus sequence of the preceding operation and
         // the subsequent buffer access.
         fence(Ordering::SeqCst);
+
+        core::mem::forget(self); // Prevents self from being dropped and attempting to abort
         result
     }
 
     /// Blocks waiting for the half transfer complete event. Returns an error if one occurred during
     /// the transfer.
-    pub fn wait_for_half_transfer_complete(&self) -> Result<(), Error> {
+    pub fn wait_for_half_transfer_complete(self) -> Result<(), Error> {
         let result = self.channel.wait_for_half_transfer_complete();
         // Preserve the instruction and bus sequence of the preceding operation and
         // the subsequent buffer access.
         fence(Ordering::SeqCst);
+
+        core::mem::forget(self); // Prevents self from being dropped and attempting to abort
         result
     }
 
+    /// Enable interrupts for this transfer. This will enable the transfer complete and half
+    /// transfer complete interrupts, as well as error interrupts.
     pub fn enable_interrupts(&self) {
         self.channel.enable_transfer_interrupts();
     }
 
+    /// Disable interrupts for this transfer.
     pub fn disable_interrupts(&self) {
         self.channel.disable_transfer_interrupts();
     }
 
     /// Abort a transaction and wait for it to suspend the transfer before resetting the channel
-    pub fn abort(&mut self) {
-        self.channel.abort();
+    pub fn abort(self) {
+        // Allow Drop implementation to handle transfer abortion
+    }
+}
 
-        // Preserve the instruction and bus sequence of the preceding disable and
+impl<'a, CH> Drop for DmaTransfer<'a, CH>
+where
+    CH: DmaChannel,
+{
+    fn drop(&mut self) {
+        if self.is_running() {
+            self.channel.abort();
+        }
+
+        self.disable_interrupts();
+
+        // Preserve the instruction and bus sequence of the preceding operation and
         // the subsequent buffer access.
         fence(Ordering::SeqCst);
     }
