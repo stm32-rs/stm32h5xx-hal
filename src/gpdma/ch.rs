@@ -213,8 +213,6 @@ where
                 .tof()
                 .clear()
         });
-
-        interrupt_clear_clock_sync_delay!(self.sr());
     }
 
     #[inline(always)]
@@ -235,8 +233,6 @@ where
                 TransferEvent::TransferComplete => w.tcf().clear(),
                 TransferEvent::HalfTransferComplete => w.htf().clear(),
             });
-
-            interrupt_clear_clock_sync_delay!(self.sr());
         }
         Ok(triggered)
     }
@@ -633,6 +629,10 @@ where
 
     /// Blocks waiting for a transfer to complete. Reports any errors that occur during a transfer.
     fn wait_for_transfer_complete(&self) -> Result<(), Error> {
+        if !self.is_running() {
+            return Ok(());
+        }
+
         while !self.check_transfer_complete()? {}
         Ok(())
     }
@@ -640,6 +640,10 @@ where
     /// Blocks waiting for a half transfer event to trigger. Reports any errors that occur during a
     /// transfer.
     fn wait_for_half_transfer_complete(&self) -> Result<(), Error> {
+        if !self.is_running() {
+            return Ok(());
+        }
+
         while !self.check_half_transfer_complete()? {}
         Ok(())
     }
