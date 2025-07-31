@@ -13,15 +13,29 @@ use crate::stm32::{GPDMA1, GPDMA2};
 
 use super::{
     ch::{
-        ChannelRegs, DmaChannel, DmaChannel0, DmaChannel1, DmaChannel2,
-        DmaChannel3, DmaChannel4, DmaChannel5, DmaChannel6, DmaChannel7,
-        DmaChannelImpl, DmaChannelRef,
+        Channel, ChannelRegs, DmaChannel0, DmaChannel1,
+        DmaChannel2, DmaChannel3, DmaChannel4, DmaChannel5, DmaChannel6,
+        DmaChannel7, DmaChannelRef,
     },
     DmaTransfer, Error, Instance,
 };
 
 #[allow(private_bounds)]
-impl<'a, CH: DmaChannel> IntoFuture for DmaTransfer<'a, CH> {
+pub trait DmaChannel: Channel + ChannelWaker {}
+
+impl<DMA, CH, const N: usize> DmaChannel for DmaChannelRef<DMA, CH, N>
+where
+    DMA: Instance + InstanceWaker,
+    CH: ChannelRegs,
+    Self: Deref<Target = CH>,
+{
+}
+
+#[allow(private_bounds)]
+impl<'a, CH> IntoFuture for DmaTransfer<'a, CH>
+where
+    CH: DmaChannel,
+{
     type Output = Result<(), Error>;
     type IntoFuture = DmaTransferFuture<'a, CH>;
 
@@ -76,7 +90,7 @@ impl<'a, CH: DmaChannel> Unpin for DmaTransferFuture<'a, CH> {}
 
 impl<'a, CH> Future for DmaTransferFuture<'a, CH>
 where
-    CH: DmaChannel,
+    CH: DmaChannel + ChannelWaker,
 {
     type Output = Result<(), Error>;
 
@@ -91,17 +105,29 @@ where
 }
 
 #[allow(private_bounds)]
-impl<DMA, CH, const N: usize> DmaChannelImpl<DmaChannelRef<DMA, CH, N>>
+impl<DMA, CH, const N: usize> DmaChannelRef<DMA, CH, N>
 where
-    DMA: Instance,
+    DMA: Instance + InstanceWaker,
     CH: ChannelRegs,
-    DmaChannelRef<DMA, CH, N>: ChannelRegs,
+    Self: Deref<Target = CH>,
 {
     #[inline(always)]
     fn handle_interrupt() {
         let ch = Self::new();
         ch.disable_transfer_interrupts();
         ch.waker().wake();
+    }
+}
+
+impl<DMA, CH, const N: usize> ChannelWaker for DmaChannelRef<DMA, CH, N>
+where
+    DMA: Instance + InstanceWaker,
+    CH: ChannelRegs,
+    Self: Deref<Target = CH>,
+{
+    #[inline(always)]
+    fn waker(&self) -> &'static AtomicWaker {
+        DMA::waker(N)
     }
 }
 
@@ -123,17 +149,6 @@ pub(super) trait InstanceWaker {
 pub(super) trait ChannelWaker {
     /// Returns a reference to the AtomicWaker for the channel.
     fn waker(&self) -> &'static AtomicWaker;
-}
-
-impl<DMA, CH, const N: usize> ChannelWaker for DmaChannelRef<DMA, CH, N>
-where
-    DMA: Instance,
-    CH: ChannelRegs,
-{
-    #[inline(always)]
-    fn waker(&self) -> &'static AtomicWaker {
-        DMA::waker(N)
-    }
 }
 
 mod gpdma1 {
