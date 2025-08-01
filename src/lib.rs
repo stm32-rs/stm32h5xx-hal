@@ -83,6 +83,9 @@ pub mod dwt;
 pub mod usb;
 
 #[cfg(feature = "device-selected")]
+pub mod gpdma;
+
+#[cfg(feature = "device-selected")]
 mod sealed {
     pub trait Sealed {}
 }
