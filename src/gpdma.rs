@@ -278,22 +278,22 @@ impl<'a, CH: DmaChannel> DmaTransfer<'a, CH> {
     /// Create a new memory-to-memory transfer with the channel, source and destination buffers
     /// provided.
     pub fn memory_to_memory<S, D>(
-        config: DmaConfig<MemoryToMemory, S, D>,
+        config: DmaConfig<MemoryToMemory, S::Word, D::Word>,
         channel: &'a CH,
-        source: &'a [S],
-        destination: &'a mut [D],
+        source: S,
+        mut destination: D,
     ) -> Self
     where
-        S: Word,
-        D: Word,
+        S: ReadBuffer<Word: Word>,
+        D: WriteBuffer<Word: Word>,
     {
         let src_width = core::mem::size_of::<S>();
         let dest_width = core::mem::size_of::<D>();
 
-        let src_ptr = source.as_ptr();
-        let src_size = core::mem::size_of_val(source);
-        let dest_ptr = destination.as_mut_ptr();
-        let dest_size = core::mem::size_of_val(destination);
+        let (src_ptr, src_words) = unsafe { source.read_buffer() };
+        let src_size = core::mem::size_of::<S::Word>() * src_words;
+        let (dest_ptr, dest_words) = unsafe { destination.write_buffer() };
+        let dest_size = core::mem::size_of::<D::Word>() * dest_words;
 
         // Size must be aligned with destination width if source width is greater than destination
         // width and packing mode is used, therefore the maximum size must be dictated by
@@ -312,7 +312,7 @@ impl<'a, CH: DmaChannel> DmaTransfer<'a, CH> {
 
         // We also need to ensure that the destination
 
-        Self::new::<S, D, MemoryToMemory>(
+        Self::new::<S::Word, D::Word, MemoryToMemory>(
             channel, config, src_ptr, dest_ptr, size,
         )
     }
@@ -320,20 +320,20 @@ impl<'a, CH: DmaChannel> DmaTransfer<'a, CH> {
     /// Create a new memory-to-peripheral transfer with the channel, source buffer and destination
     /// peripheral provided.
     pub fn memory_to_peripheral<S, D>(
-        config: DmaConfig<MemoryToPeripheral, S, D::Word>,
+        config: DmaConfig<MemoryToPeripheral, S::Word, D::Word>,
         channel: &'a CH,
-        source: &'a [S],
+        source: S,
         mut destination: D,
     ) -> Self
     where
-        S: Word,
+        S: ReadBuffer<Word: Word>,
         D: WriteBuffer<Word: Word>,
     {
-        let src_ptr = source.as_ptr();
-        let src_size = core::mem::size_of_val(source);
+        let (src_ptr, src_words) = unsafe { source.read_buffer() };
+        let src_size = core::mem::size_of::<S::Word>() * src_words;
         let (dest_ptr, _) = unsafe { destination.write_buffer() };
 
-        Self::new::<S, D::Word, MemoryToPeripheral>(
+        Self::new::<S::Word, D::Word, MemoryToPeripheral>(
             channel, config, src_ptr, dest_ptr, src_size,
         )
         .apply_hardware_request_config(config)
@@ -342,21 +342,21 @@ impl<'a, CH: DmaChannel> DmaTransfer<'a, CH> {
     /// Create a new peripheral-to-memory transfer with the channel, source peripheral and
     /// destination buffer provided.
     pub fn peripheral_to_memory<S, D>(
-        config: DmaConfig<PeripheralToMemory, S::Word, D>,
+        config: DmaConfig<PeripheralToMemory, S::Word, D::Word>,
         channel: &'a CH,
         source: S,
-        destination: &'a mut [D],
+        mut destination: D,
     ) -> Self
     where
         S: ReadBuffer<Word: Word>,
-        D: Word,
+        D: WriteBuffer<Word: Word>,
     {
         let (src_ptr, _) = unsafe { source.read_buffer() };
 
-        let dest_ptr = destination.as_mut_ptr();
-        let dest_size = core::mem::size_of_val(destination);
+        let (dest_ptr, dest_words) = unsafe { destination.write_buffer() };
+        let dest_size = core::mem::size_of::<D::Word>() * dest_words;
 
-        Self::new::<S::Word, D, PeripheralToMemory>(
+        Self::new::<S::Word, D::Word, PeripheralToMemory>(
             channel, config, src_ptr, dest_ptr, dest_size,
         )
         .apply_hardware_request_config(config)

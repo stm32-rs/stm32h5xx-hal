@@ -50,11 +50,13 @@ pub trait RxAddr<W: Word> {
 /// initiating transmissions.
 pub trait Tx<W>: Sealed {
     type CH: DmaChannel;
-    fn init_tx_transfer<'a>(
+    fn init_tx_transfer<'a, S>(
         &'a self,
         config: DmaConfig<MemoryToPeripheral, W, W>,
-        words: &'a [W],
-    ) -> DmaTransfer<'a, Self::CH>;
+        source: S,
+    ) -> DmaTransfer<'a, Self::CH>
+    where
+        S: ReadBuffer<Word = W>;
 }
 
 /// The `Rx` trait to defines the method needed for a peripheral DMA struct (ie. [`DmaRx`] or
@@ -63,11 +65,13 @@ pub trait Tx<W>: Sealed {
 /// initiating receiving transfers.
 pub trait Rx<W>: Sealed {
     type CH: DmaChannel;
-    fn init_rx_transfer<'a>(
+    fn init_rx_transfer<'a, D>(
         &'a self,
         config: DmaConfig<PeripheralToMemory, W, W>,
-        words: &'a mut [W],
-    ) -> DmaTransfer<'a, Self::CH>;
+        destination: D,
+    ) -> DmaTransfer<'a, Self::CH>
+    where
+        D: WriteBuffer<Word = W>;
 }
 
 /// `DmaRx` encapsulates the initialization of a peripheral-to-memory DMA transaction for receiving
@@ -117,12 +121,20 @@ where
     W: Word,
 {
     type CH = CH;
-    fn init_rx_transfer<'a>(
+    fn init_rx_transfer<'a, D>(
         &'a self,
         config: DmaConfig<PeripheralToMemory, W, W>,
-        words: &'a mut [W],
-    ) -> DmaTransfer<'a, CH> {
-        DmaTransfer::peripheral_to_memory(config, &self.channel, self, words)
+        destination: D,
+    ) -> DmaTransfer<'a, CH>
+    where
+        D: WriteBuffer<Word = W>,
+    {
+        DmaTransfer::peripheral_to_memory(
+            config,
+            &self.channel,
+            self,
+            destination,
+        )
     }
 }
 
@@ -173,12 +185,15 @@ where
     W: Word,
 {
     type CH = CH;
-    fn init_tx_transfer<'a>(
+    fn init_tx_transfer<'a, S>(
         &'a self,
         config: DmaConfig<MemoryToPeripheral, W, W>,
-        words: &'a [W],
-    ) -> DmaTransfer<'a, CH> {
-        DmaTransfer::memory_to_peripheral(config, &self.channel, words, self)
+        source: S,
+    ) -> DmaTransfer<'a, CH>
+    where
+        S: ReadBuffer<Word = W>,
+    {
+        DmaTransfer::memory_to_peripheral(config, &self.channel, source, self)
     }
 }
 
@@ -219,12 +234,15 @@ where
     RX: DmaChannel,
 {
     type CH = TX;
-    fn init_tx_transfer<'a>(
+    fn init_tx_transfer<'a, S>(
         &'a self,
         config: DmaConfig<MemoryToPeripheral, W, W>,
-        words: &'a [W],
-    ) -> DmaTransfer<'a, TX> {
-        self.tx.init_tx_transfer(config, words)
+        source: S,
+    ) -> DmaTransfer<'a, TX>
+    where
+        S: ReadBuffer<Word = W>,
+    {
+        self.tx.init_tx_transfer(config, source)
     }
 }
 
@@ -236,11 +254,14 @@ where
     RX: DmaChannel,
 {
     type CH = RX;
-    fn init_rx_transfer<'a>(
+    fn init_rx_transfer<'a, D>(
         &'a self,
         config: DmaConfig<PeripheralToMemory, W, W>,
-        words: &'a mut [W],
-    ) -> DmaTransfer<'a, RX> {
-        self.rx.init_rx_transfer(config, words)
+        destination: D,
+    ) -> DmaTransfer<'a, RX>
+    where
+        D: WriteBuffer<Word = W>,
+    {
+        self.rx.init_rx_transfer(config, destination)
     }
 }
