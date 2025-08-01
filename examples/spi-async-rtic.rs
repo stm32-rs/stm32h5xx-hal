@@ -3,7 +3,6 @@
 
 mod utilities;
 
-use embedded_hal_async::spi::SpiBus;
 use rtic::app;
 use stm32h5xx_hal::{
     gpdma::{periph::DmaDuplex, DmaChannel0, DmaChannel1},
@@ -19,6 +18,8 @@ systick_monotonic!(Mono, 1000);
 #[app(device = pac, dispatchers = [USART1, USART2], peripherals = true)]
 mod app {
 
+    use cortex_m::singleton;
+    use embedded_dma::{ReadBuffer, WriteBuffer};
     use stm32h5::stm32h503::{GPDMA1, NVIC};
 
     use super::*;
@@ -33,8 +34,8 @@ mod app {
             pac::SPI2,
             DmaDuplex<pac::SPI2, u8, DmaChannel0<GPDMA1>, DmaChannel1<GPDMA1>>,
         >,
-        source: [u8; 40],
-        dest: [u8; 40],
+        source: &'static mut [u8; 40],
+        dest: &'static mut [u8; 40],
     }
 
     #[init]
@@ -92,8 +93,8 @@ mod app {
             Local {
                 led,
                 spi,
-                source: [0; 40],
-                dest: [0; 40],
+                source: singleton!(: [u8; 40] = [0; 40]).unwrap(),
+                dest: singleton!(: [u8; 40] = [0; 40]).unwrap(),
             },
         )
     }
@@ -114,14 +115,17 @@ mod app {
             log::info!("Starting SPI transfer");
             ctx.local.source.fill(*ctx.local.count as u8);
             ctx.local.dest.fill(0);
-            *ctx.local.count += 1;
-            ctx.local
-                .spi
-                .transfer(ctx.local.dest, ctx.local.source)
-                .await
-                .unwrap();
 
-            assert_eq!(ctx.local.source, ctx.local.dest);
+            let (src_ptr, src_len) = unsafe { ctx.local.source.read_buffer() };
+            let src = unsafe { core::slice::from_raw_parts(src_ptr, src_len) };
+            let (dest_ptr, dest_len) = unsafe { ctx.local.dest.write_buffer() };
+            let dest =
+                unsafe { core::slice::from_raw_parts_mut(dest_ptr, dest_len) };
+
+            *ctx.local.count += 1;
+            ctx.local.spi.transfer_dma(src, dest).await.unwrap();
+
+            assert_eq!(*ctx.local.source, *ctx.local.dest);
             log::info!("Success!");
             Mono::delay(1000.millis()).await;
         }

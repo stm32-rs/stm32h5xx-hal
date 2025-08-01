@@ -5,8 +5,8 @@ use core::{
     task::{Context, Poll},
 };
 
+use embedded_dma::{ReadBuffer, WriteBuffer};
 use embedded_hal::spi::ErrorType;
-use embedded_hal_async::spi::SpiBus;
 use futures_util::join;
 use futures_util::task::AtomicWaker;
 
@@ -228,18 +228,22 @@ where
     W: Word + DmaWord,
     MODE: Rx<W>,
 {
-    pub fn start_dma_read<'a>(
+    pub fn start_dma_read<'a, D>(
         &'a mut self,
-        words: &'a mut [W],
-    ) -> Result<DmaTransfer<'a, <MODE as Rx<W>>::CH>, Error> {
+        mut destination: D,
+    ) -> Result<DmaTransfer<'a, <MODE as Rx<W>>::CH>, Error>
+    where
+        D: WriteBuffer<Word = W>,
+    {
         let config = DmaConfig::new().with_request(SPI::rx_dma_request());
+        let (_, len) = unsafe { destination.write_buffer() };
 
-        self.spi.inner.set_transfer_word_count(words.len() as u16);
+        self.spi.inner.set_transfer_word_count(len as u16);
         // Make sure to handle any errors before initializing a transfer
         self.setup_read_mode()?;
 
         let spi = &mut self.spi;
-        let transfer = self.mode.init_rx_transfer(config, words);
+        let transfer = self.mode.init_rx_transfer(config, destination);
 
         spi.inner.enable_rx_dma();
 
@@ -250,8 +254,11 @@ where
         Ok(transfer)
     }
 
-    async fn read_dma(&mut self, words: &mut [W]) -> Result<(), Error> {
-        let result = self.start_dma_read(words)?.await;
+    pub async fn read_dma<D>(&mut self, destination: D) -> Result<(), Error>
+    where
+        D: WriteBuffer<Word = W>,
+    {
+        let result = self.start_dma_read(destination)?.await;
         self.finish_transfer_async(result).await
     }
 }
@@ -263,19 +270,24 @@ where
     W: Word + DmaWord,
     MODE: Tx<W>,
 {
-    pub fn start_dma_write<'a>(
+    pub fn start_dma_write<'a, S>(
         &'a mut self,
-        words: &'a [W],
-    ) -> Result<DmaTransfer<'a, <MODE as Tx<W>>::CH>, Error> {
+        source: S,
+    ) -> Result<DmaTransfer<'a, <MODE as Tx<W>>::CH>, Error>
+    where
+        S: ReadBuffer<Word = W>,
+    {
         let config = DmaConfig::new().with_request(SPI::tx_dma_request());
 
-        self.inner.set_transfer_word_count(words.len() as u16);
+        let (_, len) = unsafe { source.read_buffer() };
+
+        self.inner.set_transfer_word_count(len as u16);
 
         // Make sure to handle any errors before initializing a transfer
         self.setup_write_mode()?;
 
         let spi = &mut self.spi;
-        let transfer = self.mode.init_tx_transfer(config, words);
+        let transfer = self.mode.init_tx_transfer(config, source);
 
         transfer.start_nonblocking();
         spi.inner.enable_tx_dma();
@@ -284,8 +296,11 @@ where
         Ok(transfer)
     }
 
-    async fn write_dma(&mut self, words: &[W]) -> Result<(), Error> {
-        let result = self.start_dma_write(words)?.await;
+    pub async fn write_dma<S>(&mut self, source: S) -> Result<(), Error>
+    where
+        S: ReadBuffer<Word = W>,
+    {
+        let result = self.start_dma_write(source)?.await;
         self.finish_transfer_async(result).await
     }
 }
@@ -298,27 +313,33 @@ where
     TX: DmaChannel,
     RX: DmaChannel,
 {
-    pub fn start_dma_duplex_transfer<'a>(
+    pub fn start_dma_duplex_transfer<'a, S, D>(
         &'a mut self,
-        read: &'a mut [W],
-        write: &'a [W],
-    ) -> Result<(DmaTransfer<'a, TX>, DmaTransfer<'a, RX>), Error> {
+        source: S,
+        mut destination: D,
+    ) -> Result<(DmaTransfer<'a, TX>, DmaTransfer<'a, RX>), Error>
+    where
+        S: ReadBuffer<Word = W>,
+        D: WriteBuffer<Word = W>,
+    {
+        let (_, read_len) = unsafe { source.read_buffer() };
+        let (_, write_len) = unsafe { destination.write_buffer() };
+
         assert_eq!(
-            read.len(),
-            write.len(),
+            read_len, write_len,
             "Read and write buffers must have the same length"
         );
 
         let tx_config = DmaConfig::new().with_request(SPI::tx_dma_request());
         let rx_config = DmaConfig::new().with_request(SPI::rx_dma_request());
 
-        self.inner.set_transfer_word_count(read.len() as u16);
+        self.inner.set_transfer_word_count(read_len as u16);
 
         self.check_transfer_mode()?;
 
         let spi = &mut self.spi;
-        let tx_transfer = self.mode.init_tx_transfer(tx_config, write);
-        let rx_transfer = self.mode.init_rx_transfer(rx_config, read);
+        let tx_transfer = self.mode.init_tx_transfer(tx_config, source);
+        let rx_transfer = self.mode.init_rx_transfer(rx_config, destination);
 
         spi.inner.enable_rx_dma();
         rx_transfer.start_nonblocking();
@@ -329,12 +350,16 @@ where
         Ok((tx_transfer, rx_transfer))
     }
 
-    async fn transfer_dma(
+    pub async fn transfer_dma<S, D>(
         &mut self,
-        read: &mut [W],
-        write: &[W],
-    ) -> Result<(), Error> {
-        let (tx, rx) = self.start_dma_duplex_transfer(read, write)?;
+        source: S,
+        destination: D,
+    ) -> Result<(), Error>
+    where
+        S: ReadBuffer<Word = W>,
+        D: WriteBuffer<Word = W>,
+    {
+        let (tx, rx) = self.start_dma_duplex_transfer(source, destination)?;
         let (tx, rx) = (tx.into_future(), rx.into_future());
         let results = join!(tx, rx);
         let result = results.0.and(results.1);
@@ -342,14 +367,21 @@ where
         self.finish_transfer_async(result).await
     }
 
-    async fn transfer_inplace_dma(
+    pub async fn transfer_inplace_dma<B>(
         &mut self,
-        words: &mut [W],
-    ) -> Result<(), Error> {
+        mut buffer: B,
+    ) -> Result<(), Error>
+    where
+        B: WriteBuffer<Word = W>,
+    {
+        let (ptr, len) = unsafe { buffer.write_buffer() };
+
         // Note (unsafe): Data will be read from the start of the buffer before data is written
-        // to those locations just like for blocking non-DMA in-place transfers
-        let write: &[W] = unsafe { *(words.as_ptr() as *const &[W]) };
-        self.transfer_dma(words, write).await
+        // to those locations just like for blocking non-DMA in-place transfers, and the location
+        // is already guaranteed to be 'static
+        let source = unsafe { core::slice::from_raw_parts(ptr, len) };
+
+        self.transfer_dma(source, buffer).await
     }
 }
 
@@ -359,112 +391,6 @@ where
     W: Word,
 {
     type Error = Error;
-}
-
-impl<SPI, CH, W> SpiBus<W> for SpiDma<SPI, DmaTx<SPI, W, CH>, W>
-where
-    SPI: Instance + Waker,
-    W: Word + DmaWord,
-    CH: DmaChannel,
-{
-    async fn read(&mut self, _words: &mut [W]) -> Result<(), Self::Error> {
-        unimplemented!("Not supported for simplex transmitter")
-    }
-
-    async fn write(&mut self, words: &[W]) -> Result<(), Self::Error> {
-        self.write_dma(words).await
-    }
-
-    async fn transfer(
-        &mut self,
-        _read: &mut [W],
-        _write: &[W],
-    ) -> Result<(), Self::Error> {
-        unimplemented!("Not supported for simplex transmitter")
-    }
-
-    async fn transfer_in_place(
-        &mut self,
-        _words: &mut [W],
-    ) -> Result<(), Self::Error> {
-        unimplemented!("Not supported for simplex transmitter")
-    }
-
-    async fn flush(&mut self) -> Result<(), Self::Error> {
-        // This is handled within each of the above functions
-        Ok(())
-    }
-}
-
-impl<SPI, CH, W> SpiBus<W> for SpiDma<SPI, DmaRx<SPI, W, CH>, W>
-where
-    SPI: Instance + Waker,
-    W: Word + DmaWord,
-    CH: DmaChannel,
-{
-    async fn read(&mut self, words: &mut [W]) -> Result<(), Self::Error> {
-        self.read_dma(words).await
-    }
-
-    async fn write(&mut self, _words: &[W]) -> Result<(), Self::Error> {
-        unimplemented!("Not supported for simplex receiver")
-    }
-
-    async fn transfer(
-        &mut self,
-        _read: &mut [W],
-        _write: &[W],
-    ) -> Result<(), Self::Error> {
-        unimplemented!("Not supported for simplex receiver")
-    }
-
-    async fn transfer_in_place(
-        &mut self,
-        _words: &mut [W],
-    ) -> Result<(), Self::Error> {
-        unimplemented!("Not supported for simplex receiver")
-    }
-
-    async fn flush(&mut self) -> Result<(), Self::Error> {
-        // This is handled within each of the above functions
-        Ok(())
-    }
-}
-
-impl<SPI, TX, RX, W> SpiBus<W> for SpiDma<SPI, DmaDuplex<SPI, W, TX, RX>, W>
-where
-    SPI: Instance + Waker,
-    W: Word + DmaWord,
-    TX: DmaChannel,
-    RX: DmaChannel,
-{
-    async fn read(&mut self, words: &mut [W]) -> Result<(), Self::Error> {
-        self.read_dma(words).await
-    }
-
-    async fn write(&mut self, words: &[W]) -> Result<(), Self::Error> {
-        self.write_dma(words).await
-    }
-
-    async fn transfer(
-        &mut self,
-        read: &mut [W],
-        write: &[W],
-    ) -> Result<(), Self::Error> {
-        self.transfer_dma(read, write).await
-    }
-
-    async fn transfer_in_place(
-        &mut self,
-        words: &mut [W],
-    ) -> Result<(), Self::Error> {
-        self.transfer_inplace_dma(words).await
-    }
-
-    async fn flush(&mut self) -> Result<(), Self::Error> {
-        // This is handled within each of the above functions
-        Ok(())
-    }
 }
 
 struct SpiDmaFuture<'a, SPI: Instance, MODE, W: Word> {
