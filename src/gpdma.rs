@@ -249,12 +249,12 @@ pub struct DmaTransfer<'a, CH>
 where
     CH: DmaChannel,
 {
-    channel: &'a CH,
+    channel: &'a mut CH,
 }
 
 impl<'a, CH: DmaChannel> DmaTransfer<'a, CH> {
     fn new<S, D, T>(
-        channel: &'a CH,
+        channel: &'a mut CH,
         config: DmaConfig<T, S, D>,
         src_ptr: *const S,
         dest_ptr: *mut D,
@@ -279,7 +279,7 @@ impl<'a, CH: DmaChannel> DmaTransfer<'a, CH> {
     /// provided.
     pub fn memory_to_memory<S, D>(
         config: DmaConfig<MemoryToMemory, S::Word, D::Word>,
-        channel: &'a CH,
+        channel: &'a mut CH,
         source: S,
         mut destination: D,
     ) -> Self
@@ -321,7 +321,7 @@ impl<'a, CH: DmaChannel> DmaTransfer<'a, CH> {
     /// peripheral provided.
     pub fn memory_to_peripheral<S, D>(
         config: DmaConfig<MemoryToPeripheral, S::Word, D::Word>,
-        channel: &'a CH,
+        channel: &'a mut CH,
         source: S,
         mut destination: D,
     ) -> Self
@@ -343,7 +343,7 @@ impl<'a, CH: DmaChannel> DmaTransfer<'a, CH> {
     /// destination buffer provided.
     pub fn peripheral_to_memory<S, D>(
         config: DmaConfig<PeripheralToMemory, S::Word, D::Word>,
-        channel: &'a CH,
+        channel: &'a mut CH,
         source: S,
         mut destination: D,
     ) -> Self
@@ -367,7 +367,7 @@ impl<'a, CH: DmaChannel> DmaTransfer<'a, CH> {
     /// provided.
     pub fn peripheral_to_peripheral<S, D, T>(
         config: DmaConfig<PeripheralToPeripheral<T>, S::Word, D::Word>,
-        channel: &'a CH,
+        channel: &'a mut CH,
         source: S,
         mut destination: D,
     ) -> Self
@@ -414,7 +414,7 @@ impl<'a, CH: DmaChannel> DmaTransfer<'a, CH> {
 }
 
 impl<'a, CH: DmaChannel> DmaTransfer<'a, CH> {
-    fn start_transfer_internal(&self) {
+    fn start_transfer_internal(&mut self) {
         // Preserve the instruction and bus ordering of preceding buffer access
         // to the subsequent access by the DMA peripheral due to enabling it.
         fence(Ordering::SeqCst);
@@ -424,13 +424,13 @@ impl<'a, CH: DmaChannel> DmaTransfer<'a, CH> {
 
     /// Start a transfer. Does not block waiting for the transfer to start and does not check for
     /// errors starting the transfer
-    pub fn start_nonblocking(&self) {
+    pub fn start_nonblocking(&mut self) {
         self.start_transfer_internal();
     }
 
     /// Start a transfer and block waiting for it to start. Returns an error if one occurred
     /// starting the transfer.
-    pub fn start(&self) -> Result<(), Error> {
+    pub fn start(&mut self) -> Result<(), Error> {
         self.start_nonblocking();
         self.channel.wait_for_transfer_started()
     }
@@ -505,24 +505,18 @@ impl<'a, CH: DmaChannel> DmaTransfer<'a, CH> {
 
     /// Blocks waiting for the half transfer complete event. Returns an error if one occurred during
     /// the transfer.
-    pub fn wait_for_half_transfer_complete(self) -> Result<(), Error> {
-        let result = self.channel.wait_for_half_transfer_complete();
-        // Preserve the instruction and bus sequence of the preceding operation and
-        // the subsequent buffer access.
-        fence(Ordering::SeqCst);
-
-        core::mem::forget(self); // Prevents self from being dropped and attempting to abort
-        result
+    pub fn wait_for_half_transfer_complete(&mut self) -> Result<(), Error> {
+        self.channel.wait_for_half_transfer_complete()
     }
 
     /// Enable interrupts for this transfer. This will enable the transfer complete and half
     /// transfer complete interrupts, as well as error interrupts.
-    pub fn enable_interrupts(&self) {
+    pub fn enable_interrupts(&mut self) {
         self.channel.enable_transfer_interrupts();
     }
 
     /// Disable interrupts for this transfer.
-    pub fn disable_interrupts(&self) {
+    pub fn disable_interrupts(&mut self) {
         self.channel.disable_transfer_interrupts();
     }
 

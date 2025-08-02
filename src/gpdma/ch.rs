@@ -442,12 +442,12 @@ where
 /// module.
 #[doc(hidden)]
 pub(super) trait Channel {
-    fn enable(&self);
+    fn enable(&mut self);
 
     fn is_suspended(&self) -> bool;
 
     /// Initiates the suspension of a transfer
-    fn initiate_suspend(&self);
+    fn initiate_suspend(&mut self);
 
     /// Resume transfer
     fn initiate_resume(&self);
@@ -467,40 +467,40 @@ pub(super) trait Channel {
     fn is_running(&self) -> bool;
 
     /// Reset the channel registers so it can be reused.
-    fn reset_channel(&self);
+    fn reset_channel(&mut self);
 
     /// Suspend the transfer and blocks until it has been suspended. Reports any that occur while
     /// waiting for the transfer to suspend.
-    fn suspend_transfer(&self);
+    fn suspend_transfer(&mut self);
 
     /// Resumes a suspended transfer and blocks until the channel transitions out of the idle state
     /// Reports any errors that occur resuming the transfer.
-    fn resume_transfer(&self) -> Result<(), Error>;
+    fn resume_transfer(&mut self) -> Result<(), Error>;
 
     /// Aborts an operation by suspending the transfer and resetting the channel.
-    fn abort(&self);
+    fn abort(&mut self);
 
     /// Blocks waiting for a transfer to be started (or for it to be idle and complete). Reports any
     /// errors that occur while waiting for the transfer to start.
-    fn wait_for_transfer_started(&self) -> Result<(), Error>;
+    fn wait_for_transfer_started(&mut self) -> Result<(), Error>;
 
     /// Blocks waiting for a transfer to complete. Reports any errors that occur during a transfer.
-    fn wait_for_transfer_complete(&self) -> Result<(), Error>;
+    fn wait_for_transfer_complete(&mut self) -> Result<(), Error>;
 
     /// Blocks waiting for a half transfer event to trigger. Reports any errors that occur during a
     /// transfer.
-    fn wait_for_half_transfer_complete(&self) -> Result<(), Error>;
+    fn wait_for_half_transfer_complete(&mut self) -> Result<(), Error>;
 
     /// Apply a transfer configuration to the channel
     fn apply_config<T: TransferType, S: Word, D: Word>(
-        &self,
+        &mut self,
         config: DmaConfig<T, S, D>,
     );
 
     /// Apply hardware request configuration to the channel. Not relevant to memory-to-memory
     /// transfers.
     fn configure_hardware_request<T: HardwareRequest, S: Word, D: Word>(
-        &self,
+        &mut self,
         config: DmaConfig<T, S, D>,
     );
 
@@ -511,31 +511,31 @@ pub(super) trait Channel {
         S: Word,
         D: Word,
     >(
-        &self,
+        &mut self,
         config: DmaConfig<T, S, D>,
     );
 
     /// Apply a data transform to the channel transfer
-    fn apply_data_transform(&self, data_transform: DataTransform);
+    fn apply_data_transform(&mut self, data_transform: DataTransform);
     /// Set the source address. This sets the source address and data width.
-    fn set_source<W: Word>(&self, ptr: *const W);
+    fn set_source<W: Word>(&mut self, ptr: *const W);
 
     /// Set the destination address. This sets the destination address and data width
-    fn set_destination<W: Word>(&self, ptr: *mut W);
+    fn set_destination<W: Word>(&mut self, ptr: *mut W);
 
     /// Set the transfer size in bytes (not words!). Size must be aligned with destination width if
     /// source width is greater than destination width and packing mode is used. Otherwise the size
     /// must be aligned with the source data width.
-    fn set_transfer_size_bytes(&self, size: usize);
+    fn set_transfer_size_bytes(&mut self, size: usize);
 
     /// Enable transfer interrupts for the channel. This enables the transfer complete,
     /// half-transfer complete, data transfer error and user setting error interrupts. This is
     /// useful for starting a transfer that will be monitored by an interrupt handler.
-    fn enable_transfer_interrupts(&self);
+    fn enable_transfer_interrupts(&mut self);
 
     /// Disable transfer interrupts for the channel. It is expected that this will be called from
     /// an interrupt handler after a transfer is completed.
-    fn disable_transfer_interrupts(&self);
+    fn disable_transfer_interrupts(&mut self);
 }
 
 impl<DMA, CH, const N: usize> Channel for DmaChannelRef<DMA, CH, N>
@@ -545,7 +545,7 @@ where
     Self: Deref<Target = CH>,
 {
     #[inline(always)]
-    fn enable(&self) {
+    fn enable(&mut self) {
         self.cr().modify(|_, w| w.en().enabled());
     }
 
@@ -554,7 +554,7 @@ where
         self.sr().read().suspf().bit_is_set()
     }
 
-    fn initiate_suspend(&self) {
+    fn initiate_suspend(&mut self) {
         if self.is_suspended() {
             return;
         }
@@ -590,23 +590,23 @@ where
         !self.is_idle()
     }
 
-    fn reset_channel(&self) {
+    fn reset_channel(&mut self) {
         self.reset();
         self.clear_all_event_flags();
     }
 
-    fn suspend_transfer(&self) {
+    fn suspend_transfer(&mut self) {
         self.initiate_suspend();
         while !self.is_suspended() {}
     }
 
-    fn resume_transfer(&self) -> Result<(), Error> {
+    fn resume_transfer(&mut self) -> Result<(), Error> {
         self.initiate_resume();
         while !self.check_transfer_started()? {}
         Ok(())
     }
 
-    fn abort(&self) {
+    fn abort(&mut self) {
         if !self.is_idle() {
             self.suspend_transfer();
         }
@@ -614,14 +614,14 @@ where
         self.reset_channel();
     }
 
-    fn wait_for_transfer_started(&self) -> Result<(), Error> {
+    fn wait_for_transfer_started(&mut self) -> Result<(), Error> {
         while !self.check_transfer_started().inspect_err(|_| {
             self.clear_all_event_flags();
         })? {}
         Ok(())
     }
 
-    fn wait_for_transfer_complete(&self) -> Result<(), Error> {
+    fn wait_for_transfer_complete(&mut self) -> Result<(), Error> {
         loop {
             match self.check_transfer_complete() {
                 Ok(true) => {
@@ -639,7 +639,7 @@ where
         }
     }
 
-    fn wait_for_half_transfer_complete(&self) -> Result<(), Error> {
+    fn wait_for_half_transfer_complete(&mut self) -> Result<(), Error> {
         loop {
             match self.check_half_transfer_complete() {
                 Ok(true) => {
@@ -658,7 +658,7 @@ where
     }
 
     fn apply_config<T: TransferType, S: Word, D: Word>(
-        &self,
+        &mut self,
         config: DmaConfig<T, S, D>,
     ) {
         self.set_source_addressing_mode(
@@ -683,7 +683,7 @@ where
     }
 
     fn configure_hardware_request<T: HardwareRequest, S: Word, D: Word>(
-        &self,
+        &mut self,
         config: DmaConfig<T, S, D>,
     ) {
         self.set_block_request_mode(config.transfer_type.block_request());
@@ -695,7 +695,7 @@ where
         S: Word,
         D: Word,
     >(
-        &self,
+        &mut self,
         config: DmaConfig<T, S, D>,
     ) {
         self.set_peripheral_flow_control_mode(
@@ -703,7 +703,7 @@ where
         );
     }
 
-    fn apply_data_transform(&self, data_transform: DataTransform) {
+    fn apply_data_transform(&mut self, data_transform: DataTransform) {
         self.set_source_byte_exchange(data_transform.source_byte_exchange);
         self.set_padding_alignment_mode(data_transform.padding_alignment);
         self.set_destination_half_word_exchange(
@@ -712,29 +712,29 @@ where
         self.set_destination_byte_exchange(data_transform.dest_byte_exchange);
     }
 
-    fn set_source<W: Word>(&self, ptr: *const W) {
+    fn set_source<W: Word>(&mut self, ptr: *const W) {
         self.set_source_address(ptr as u32);
         self.set_source_data_width(core::mem::size_of::<W>());
     }
 
-    fn set_destination<W: Word>(&self, ptr: *mut W) {
+    fn set_destination<W: Word>(&mut self, ptr: *mut W) {
         self.set_destination_address(ptr as u32);
         self.set_destination_data_width(core::mem::size_of::<W>());
     }
 
-    fn set_transfer_size_bytes(&self, size: usize) {
+    fn set_transfer_size_bytes(&mut self, size: usize) {
         self.set_block_size(size as u16);
     }
 
     #[inline(always)]
-    fn enable_transfer_interrupts(&self) {
+    fn enable_transfer_interrupts(&mut self) {
         self.cr().modify(|_, w| {
             w.tcie().enabled().dteie().enabled().useie().enabled()
         });
     }
 
     #[inline(always)]
-    fn disable_transfer_interrupts(&self) {
+    fn disable_transfer_interrupts(&mut self) {
         self.cr().modify(|_, w| {
             w.tcie().disabled().dteie().disabled().useie().disabled()
         });

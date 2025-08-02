@@ -7,7 +7,7 @@
 //!    encapsulate the logic for initializing these transfers.
 //!  - The [`DmaDuplex`] struct combines both TX and RX capabilities, allowing for full-duplex
 //!    operations.
-use core::marker::PhantomData;
+use core::{cell::Cell, marker::PhantomData};
 
 use crate::Sealed;
 
@@ -15,6 +15,36 @@ use super::{
     DmaChannel, DmaConfig, DmaTransfer, MemoryToPeripheral, PeripheralToMemory,
     ReadBuffer, Word, WriteBuffer,
 };
+
+/// `PeriphTxBuffer` is a wrapper around a peripheral's transmit data register address, used to
+/// provide a WriteBuffer implementation for initiating memory-to-peripheral DMA transfers.
+struct PeriphTxBuffer<A: TxAddr<W>, W: Word> {
+    _addr: PhantomData<A>,
+    _word: PhantomData<W>,
+}
+
+unsafe impl<A: TxAddr<W>, W: Word> WriteBuffer for PeriphTxBuffer<A, W> {
+    type Word = W;
+
+    unsafe fn write_buffer(&mut self) -> (*mut Self::Word, usize) {
+        (A::tx_addr(), 1)
+    }
+}
+
+/// `PeriphRxBuffer` is a wrapper around a peripheral's receive data register address, used to
+/// provide a ReadBuffer implementation for initiating peripheral-to-memory DMA transfers.
+struct PeriphRxBuffer<A: RxAddr<W>, W: Word> {
+    _addr: PhantomData<A>,
+    _word: PhantomData<W>,
+}
+
+unsafe impl<A: RxAddr<W>, W: Word> ReadBuffer for PeriphRxBuffer<A, W> {
+    type Word = W;
+
+    unsafe fn read_buffer(&self) -> (*const Self::Word, usize) {
+        (A::rx_addr(), 1)
+    }
+}
 
 /// `TxAddr` is a trait that provides a method to obtain the address of the transmit data register
 /// of a peripheral. This is used to facilitate memory-to-peripheral DMA transactions. The
@@ -44,35 +74,47 @@ pub trait RxAddr<W: Word> {
     unsafe fn rx_addr() -> *const W;
 }
 
-/// The `Tx` trait to defines the method needed for a peripheral DMA struct (ie. [`DmaTx`] or
-/// [`DmaDuplex`]) that is used to initiate a memory-to-peripheral DMA transaction. It also
-/// functions as a marker trait to indicate that the peripheral DMA struct can be used for
-/// initiating transmissions.
-pub trait Tx<W>: Sealed {
-    type CH: DmaChannel;
-    fn init_tx_transfer<'a, S>(
-        &'a self,
-        config: DmaConfig<MemoryToPeripheral, W, W>,
-        source: S,
-    ) -> DmaTransfer<'a, Self::CH>
+trait TxBuffer<W: Word> {
+    /// Returns a `PeriphTxBuffer` that provides a write buffer for the peripheral's transmit data
+    /// register. This is used to initiate memory-to-peripheral DMA transfers. Implemented
+    /// automatically for any implementer of `TxAddr`.
+    ///
+    /// # Safety
+    /// TxAddr already requires the caller to ensure that the returned pointer is valid and as such
+    /// is marked unsafe, so marking this method as unsafe is redundant.
+    fn tx_buffer() -> PeriphTxBuffer<Self, W>
     where
-        S: ReadBuffer<Word = W>;
+        Self: TxAddr<W> + Sized,
+    {
+        PeriphTxBuffer {
+            _addr: PhantomData,
+            _word: PhantomData,
+        }
+    }
 }
 
-/// The `Rx` trait to defines the method needed for a peripheral DMA struct (ie. [`DmaRx`] or
-/// [`DmaDuplex`]) that is used to initiate a peripheral-to-memory DMA transaction. It also
-/// functions as a marker trait to indicate that the peripheral DMA struct can be used for
-/// initiating receiving transfers.
-pub trait Rx<W>: Sealed {
-    type CH: DmaChannel;
-    fn init_rx_transfer<'a, D>(
-        &'a self,
-        config: DmaConfig<PeripheralToMemory, W, W>,
-        destination: D,
-    ) -> DmaTransfer<'a, Self::CH>
+impl<W: Word, T: TxAddr<W>> TxBuffer<W> for T {}
+
+trait RxBuffer<W: Word> {
+    /// Returns a `PeriphRxBuffer` that provides a read buffer for the peripheral's receive data
+    /// register. This is used to initiate peripheral-to-memory DMA transfers. Implemented
+    /// automatically for any implementer of `RxAddr`.
+    ///
+    /// # Safety
+    /// RxAddr already requires the caller to ensure that the returned pointer is valid and as such
+    /// is marked unsafe, so marking this method as unsafe is redundant.
+    fn rx_buffer() -> PeriphRxBuffer<Self, W>
     where
-        D: WriteBuffer<Word = W>;
+        Self: RxAddr<W> + Sized,
+    {
+        PeriphRxBuffer {
+            _addr: PhantomData,
+            _word: PhantomData,
+        }
+    }
 }
+
+impl<W: Word, T: RxAddr<W>> RxBuffer<W> for T {}
 
 /// `DmaRx` encapsulates the initialization of a peripheral-to-memory DMA transaction for receiving
 /// data. Used by peripheral DMA implementations.
@@ -102,27 +144,16 @@ impl<PERIPH, W, CH: DmaChannel> From<CH> for DmaRx<PERIPH, W, CH> {
     }
 }
 
-unsafe impl<PERIPH: RxAddr<W>, W: Word, CH> ReadBuffer
-    for &DmaRx<PERIPH, W, CH>
-{
-    type Word = W;
-
-    unsafe fn read_buffer(&self) -> (*const Self::Word, usize) {
-        (PERIPH::rx_addr(), 1)
-    }
-}
-
 impl<PERIPH, W, CH> Sealed for DmaRx<PERIPH, W, CH> {}
 
-impl<PERIPH, W, CH> Rx<W> for DmaRx<PERIPH, W, CH>
+impl<PERIPH, W, CH> DmaRx<PERIPH, W, CH>
 where
     PERIPH: RxAddr<W>,
     CH: DmaChannel,
     W: Word,
 {
-    type CH = CH;
-    fn init_rx_transfer<'a, D>(
-        &'a self,
+    pub fn init_rx_transfer<'a, D>(
+        &'a mut self,
         config: DmaConfig<PeripheralToMemory, W, W>,
         destination: D,
     ) -> DmaTransfer<'a, CH>
@@ -131,8 +162,8 @@ where
     {
         DmaTransfer::peripheral_to_memory(
             config,
-            &self.channel,
-            self,
+            &mut self.channel,
+            PERIPH::rx_buffer(),
             destination,
         )
     }
@@ -166,34 +197,28 @@ impl<PERIPH, W, CH: DmaChannel> From<CH> for DmaTx<PERIPH, W, CH> {
     }
 }
 
-unsafe impl<PERIPH: TxAddr<W>, W: Word, CH> WriteBuffer
-    for &DmaTx<PERIPH, W, CH>
-{
-    type Word = W;
-
-    unsafe fn write_buffer(&mut self) -> (*mut Self::Word, usize) {
-        (PERIPH::tx_addr(), 1)
-    }
-}
-
 impl<PERIPH, W, CH> Sealed for DmaTx<PERIPH, W, CH> {}
 
-impl<PERIPH, W, CH> Tx<W> for DmaTx<PERIPH, W, CH>
+impl<PERIPH, W, CH> DmaTx<PERIPH, W, CH>
 where
     PERIPH: TxAddr<W>,
     CH: DmaChannel,
     W: Word,
 {
-    type CH = CH;
-    fn init_tx_transfer<'a, S>(
-        &'a self,
+    pub fn init_tx_transfer<'a, S>(
+        &'a mut self,
         config: DmaConfig<MemoryToPeripheral, W, W>,
         source: S,
     ) -> DmaTransfer<'a, CH>
     where
         S: ReadBuffer<Word = W>,
     {
-        DmaTransfer::memory_to_peripheral(config, &self.channel, source, self)
+        DmaTransfer::memory_to_peripheral(
+            config,
+            &mut self.channel,
+            source,
+            PERIPH::tx_buffer(),
+        )
     }
 }
 
@@ -201,8 +226,8 @@ where
 /// peripheral-to-memory DMA transaction for to enable setting up of full-duplex transmission and
 /// reception of data. Used by peripheral DMA implementations.
 pub struct DmaDuplex<PERIPH, W, TX, RX> {
-    tx: DmaTx<PERIPH, W, TX>,
-    rx: DmaRx<PERIPH, W, RX>,
+    tx: Cell<DmaTx<PERIPH, W, TX>>,
+    rx: Cell<DmaRx<PERIPH, W, RX>>,
 }
 
 impl<PERIPH, W, TX, RX> DmaDuplex<PERIPH, W, TX, RX>
@@ -214,54 +239,38 @@ where
 {
     pub fn new(tx: TX, rx: RX) -> Self {
         Self {
-            tx: DmaTx::from(tx),
-            rx: DmaRx::from(rx),
+            tx: Cell::new(DmaTx::from(tx)),
+            rx: Cell::new(DmaRx::from(rx)),
         }
     }
 
     pub fn free(self) -> (TX, RX) {
-        (self.tx.free(), self.rx.free())
+        (self.tx.into_inner().free(), self.rx.into_inner().free())
     }
 }
 
 impl<PERIPH, W, TX, RX> Sealed for DmaDuplex<PERIPH, W, TX, RX> {}
 
-impl<PERIPH, W, TX, RX> Tx<W> for DmaDuplex<PERIPH, W, TX, RX>
+impl<PERIPH, W, TX, RX> DmaDuplex<PERIPH, W, TX, RX>
 where
     PERIPH: TxAddr<W> + RxAddr<W>,
     W: Word,
     TX: DmaChannel,
     RX: DmaChannel,
 {
-    type CH = TX;
-    fn init_tx_transfer<'a, S>(
-        &'a self,
-        config: DmaConfig<MemoryToPeripheral, W, W>,
+    pub fn init_duplex_transfer<'a, S, D>(
+        &'a mut self,
+        tx_config: DmaConfig<MemoryToPeripheral, W, W>,
+        rx_config: DmaConfig<PeripheralToMemory, W, W>,
         source: S,
-    ) -> DmaTransfer<'a, TX>
+        destination: D,
+    ) -> (DmaTransfer<'a, TX>, DmaTransfer<'a, RX>)
     where
         S: ReadBuffer<Word = W>,
-    {
-        self.tx.init_tx_transfer(config, source)
-    }
-}
-
-impl<PERIPH, W, TX, RX> Rx<W> for DmaDuplex<PERIPH, W, TX, RX>
-where
-    PERIPH: TxAddr<W> + RxAddr<W>,
-    W: Word + Word,
-    TX: DmaChannel,
-    RX: DmaChannel,
-{
-    type CH = RX;
-    fn init_rx_transfer<'a, D>(
-        &'a self,
-        config: DmaConfig<PeripheralToMemory, W, W>,
-        destination: D,
-    ) -> DmaTransfer<'a, RX>
-    where
         D: WriteBuffer<Word = W>,
     {
-        self.rx.init_rx_transfer(config, destination)
+        let tx = self.tx.get_mut().init_tx_transfer(tx_config, source);
+        let rx = self.rx.get_mut().init_rx_transfer(rx_config, destination);
+        (tx, rx)
     }
 }

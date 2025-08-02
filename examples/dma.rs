@@ -35,9 +35,10 @@ fn main() -> ! {
     let source_copy = unsafe { &*(src.as_ptr() as *const [u8; 40]) };
     let dest_copy = unsafe { &*(dest.as_ptr() as *const [u8; 40]) };
 
-    let channel = channels.0;
+    let mut channel = channels.0;
     let config = DmaConfig::new();
-    let transfer = DmaTransfer::memory_to_memory(config, &channel, src, dest);
+    let mut transfer =
+        DmaTransfer::memory_to_memory(config, &mut channel, src, dest);
     transfer.start().unwrap();
     transfer.wait_for_transfer_complete().unwrap();
     assert_eq!(source_copy, dest_copy);
@@ -54,7 +55,8 @@ fn main() -> ! {
             .swap_destination_half_word_byte_order(),
     );
 
-    let transfer = DmaTransfer::memory_to_memory(config, &channel, src, dest);
+    let mut transfer =
+        DmaTransfer::memory_to_memory(config, &mut channel, src, dest);
 
     transfer.start().unwrap();
     transfer.wait_for_transfer_complete().unwrap();
@@ -68,7 +70,8 @@ fn main() -> ! {
     let config = DmaConfig::new().with_data_transform(
         DataTransform::builder().left_align_right_truncate(),
     );
-    let transfer = DmaTransfer::memory_to_memory(config, &channel, src, dest);
+    let mut transfer =
+        DmaTransfer::memory_to_memory(config, &mut channel, src, dest);
 
     transfer.start().unwrap();
     transfer.wait_for_transfer_complete().unwrap();
@@ -83,7 +86,8 @@ fn main() -> ! {
 
     let config =
         DmaConfig::new().with_data_transform(DataTransform::builder().unpack());
-    let transfer = DmaTransfer::memory_to_memory(config, &channel, src, dest);
+    let mut transfer =
+        DmaTransfer::memory_to_memory(config, &mut channel, src, dest);
 
     transfer.start().unwrap();
     transfer.wait_for_transfer_complete().unwrap();
@@ -103,7 +107,8 @@ fn main() -> ! {
 
     let config =
         DmaConfig::new().with_data_transform(DataTransform::builder().pack());
-    let transfer = DmaTransfer::memory_to_memory(config, &channel, src, dest);
+    let mut transfer =
+        DmaTransfer::memory_to_memory(config, &mut channel, src, dest);
 
     transfer.start().unwrap();
     transfer.wait_for_transfer_complete().unwrap();
