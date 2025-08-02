@@ -13,7 +13,7 @@ use futures_util::task::AtomicWaker;
 use crate::{
     gpdma::{
         config::DmaConfig,
-        periph::{DmaDuplex, DmaRx, DmaTx, Rx, RxAddr, Tx, TxAddr},
+        periph::{DmaDuplex, DmaRx, DmaTx, RxAddr, TxAddr},
         DmaChannel, DmaTransfer, Error as DmaError, Word as DmaWord,
     },
     interrupt,
@@ -222,16 +222,16 @@ where
 }
 
 #[allow(private_bounds)]
-impl<SPI, MODE, W> SpiDma<SPI, MODE, W>
+impl<SPI, CH, W> SpiDma<SPI, DmaRx<SPI, W, CH>, W>
 where
     SPI: Instance + Waker,
     W: Word + DmaWord,
-    MODE: Rx<W>,
+    CH: DmaChannel,
 {
     pub fn start_dma_read<'a, D>(
         &'a mut self,
         mut destination: D,
-    ) -> Result<DmaTransfer<'a, <MODE as Rx<W>>::CH>, Error>
+    ) -> Result<DmaTransfer<'a, CH>, Error>
     where
         D: WriteBuffer<Word = W>,
     {
@@ -243,7 +243,7 @@ where
         self.setup_read_mode()?;
 
         let spi = &mut self.spi;
-        let transfer = self.mode.init_rx_transfer(config, destination);
+        let mut transfer = self.mode.init_rx_transfer(config, destination);
 
         spi.inner.enable_rx_dma();
 
@@ -264,16 +264,16 @@ where
 }
 
 #[allow(private_bounds)]
-impl<SPI, MODE, W> SpiDma<SPI, MODE, W>
+impl<SPI, CH, W> SpiDma<SPI, DmaTx<SPI, W, CH>, W>
 where
     SPI: Instance + Waker,
     W: Word + DmaWord,
-    MODE: Tx<W>,
+    CH: DmaChannel,
 {
     pub fn start_dma_write<'a, S>(
         &'a mut self,
         source: S,
-    ) -> Result<DmaTransfer<'a, <MODE as Tx<W>>::CH>, Error>
+    ) -> Result<DmaTransfer<'a, CH>, Error>
     where
         S: ReadBuffer<Word = W>,
     {
@@ -287,7 +287,7 @@ where
         self.setup_write_mode()?;
 
         let spi = &mut self.spi;
-        let transfer = self.mode.init_tx_transfer(config, source);
+        let mut transfer = self.mode.init_tx_transfer(config, source);
 
         transfer.start_nonblocking();
         spi.inner.enable_tx_dma();
@@ -338,8 +338,9 @@ where
         self.check_transfer_mode()?;
 
         let spi = &mut self.spi;
-        let tx_transfer = self.mode.init_tx_transfer(tx_config, source);
-        let rx_transfer = self.mode.init_rx_transfer(rx_config, destination);
+        let (mut tx_transfer, mut rx_transfer) = self
+            .mode
+            .init_duplex_transfer(tx_config, rx_config, source, destination);
 
         spi.inner.enable_rx_dma();
         rx_transfer.start_nonblocking();
