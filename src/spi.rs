@@ -654,7 +654,8 @@ impl<SPI: Instance, W: Word> SpiSlave<SPI, W> {
     }
 
     fn hardware_cs_enabled(&self) -> bool {
-        // SSM bit indicates software control of SS input is enabled if it is set
+        // The SSM bit indicates software control of SS input is enabled if it is set. If software
+        // control is disabled, the SS input is determined by the assigned chip select pin.
         self.inner.spi.cfg2().read().ssm().is_disabled()
     }
 }
