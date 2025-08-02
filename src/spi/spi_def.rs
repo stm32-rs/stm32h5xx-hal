@@ -87,6 +87,16 @@ macro_rules! instance {
             fn rec() -> Self::Rec {
                 rec::$Spi { _marker: PhantomData }
             }
+
+            fn tx_dma_request() -> u8 {
+                use $crate::pac::gpdma1::ch::tr2::REQSEL;
+                REQSEL::[<$Spi TxDma>] as u8
+            }
+
+            fn rx_dma_request() -> u8 {
+                use $crate::pac::gpdma1::ch::tr2::REQSEL;
+                REQSEL::[<$Spi RxDma>] as u8
+            }
         }
 
         impl crate::Sealed for $SPIX {}

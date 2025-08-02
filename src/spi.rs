@@ -141,6 +141,7 @@ pub use embedded_hal::spi::{
     Mode, Phase, Polarity, MODE_0, MODE_1, MODE_2, MODE_3,
 };
 
+use crate::gpdma::Error as DmaError;
 use crate::rcc::{CoreClocks, ResetEnable};
 use crate::stm32::spi1;
 
@@ -148,6 +149,7 @@ use crate::time::Hertz;
 use spi1::{cfg1::MBR, cfg2::LSBFRST, cfg2::SSIOP};
 
 mod config;
+pub mod dma;
 mod hal;
 pub mod nonblocking;
 mod spi_def;
@@ -182,6 +184,14 @@ pub enum Error {
     /// Caller makes invalid call (e.g. write in SimplexReceiver mode, or read in
     /// SimplexTransmitter)
     InvalidOperation,
+    /// A DMA error occurred during processing
+    DmaError(DmaError),
+}
+
+impl From<DmaError> for Error {
+    fn from(error: DmaError) -> Self {
+        Error::DmaError(error)
+    }
 }
 
 pub trait Pins<SPI> {
@@ -252,6 +262,12 @@ pub trait Instance:
 
     #[doc(hidden)]
     fn rec() -> Self::Rec;
+
+    #[doc(hidden)]
+    fn tx_dma_request() -> u8;
+
+    #[doc(hidden)]
+    fn rx_dma_request() -> u8;
 }
 
 pub trait Word: Copy + Default + 'static + crate::Sealed {
@@ -487,7 +503,37 @@ impl<SPI: Instance, W: Word> Inner<SPI, W> {
         self.spi.cr1().modify(|_, w| w.spe().enabled());
     }
 
-    /// Enable SPI
+    fn is_enabled(&self) -> bool {
+        self.spi.cr1().read().spe().is_enabled()
+    }
+
+    #[inline]
+    pub fn start_transfer(&self) {
+        self.spi.cr1().modify(|_, w| w.cstart().started());
+    }
+
+    fn set_transfer_word_count(&self, words: u16) {
+        self.spi.cr2().modify(|_, w| w.tsize().set(words));
+    }
+
+    fn reset_transfer_word_count(&self) {
+        self.spi.cr2().modify(|_, w| w.tsize().set(0));
+    }
+
+    fn enable_dma_transfer_interrupts(&self) {
+        self.spi.ier().modify(|_, w| {
+            w.eotie()
+                .enabled()
+                .udrie() // Underrun
+                .enabled()
+                .ovrie() // Overrun
+                .enabled()
+                .modfie() // Mode fault
+                .enabled()
+        });
+    }
+
+    /// Disable SPI
     fn disable(&mut self) {
         self.spi.cr1().modify(|_, w| w.spe().disabled());
     }
@@ -562,6 +608,26 @@ impl<SPI: Instance, W: Word> Inner<SPI, W> {
         self.spi.ifcr().write(|w| w.modfc().clear());
         let _ = self.spi.sr().read();
         let _ = self.spi.sr().read();
+    }
+
+    /// Disable DMA for both Rx and Tx
+    #[inline]
+    pub fn enable_tx_dma(&self) {
+        self.spi.cfg1().modify(|_, w| w.txdmaen().enabled());
+    }
+
+    /// Disable DMA for both Rx and Tx
+    #[inline]
+    pub fn enable_rx_dma(&self) {
+        self.spi.cfg1().modify(|_, w| w.rxdmaen().enabled());
+    }
+
+    /// Disable DMA for both Rx and Tx
+    #[inline]
+    pub fn disable_dma(&self) {
+        self.spi
+            .cfg1()
+            .modify(|_, w| w.rxdmaen().disabled().txdmaen().disabled());
     }
 
     /// Read a single word from the receive data register
@@ -789,9 +855,6 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
     }
 
     /// Sets up a frame transaction with the given amount of data words.
-    ///
-    /// If this is called when a transaction has already started,
-    /// then an error is returned with [Error::TransactionAlreadyStarted].
     fn setup_transaction(&mut self, length: usize) {
         assert!(
             length <= u16::MAX as usize,
@@ -799,25 +862,40 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
             u16::MAX
         );
 
-        self.spi().cr2().write(|w| w.tsize().set(length as u16));
+        self.inner.set_transfer_word_count(length as u16);
 
+        self.start_transaction();
+    }
+
+    fn start_transaction(&mut self) {
         // Re-enable
         self.inner.clear_modf();
         self.inner.enable();
-        self.spi().cr1().modify(|_, w| w.cstart().started());
+        self.inner.start_transfer();
+    }
+
+    fn is_transaction_complete(&mut self) -> bool {
+        let sr = self.spi().sr().read();
+        if self.inner.is_transmitter() {
+            sr.eot().is_completed() && sr.txc().is_completed()
+        } else {
+            sr.eot().is_completed()
+        }
+    }
+
+    fn disable(&mut self) {
+        self.spi()
+            .ifcr()
+            .write(|w| w.txtfc().clear().eotc().clear().suspc().clear());
+
+        self.inner.disable();
+        self.inner.reset_transfer_word_count();
     }
 
     /// Checks if the current transaction is complete and disables the
     /// peripheral if it is, returning true. If it isn't, returns false.
     fn end_transaction_if_done(&mut self) -> bool {
-        let sr = self.spi().sr().read();
-        let is_complete = if self.inner.is_transmitter() {
-            sr.eot().is_completed() && sr.txc().is_completed()
-        } else {
-            sr.eot().is_completed()
-        };
-
-        if !is_complete {
+        if !self.is_transaction_complete() {
             return false;
         }
 
@@ -828,11 +906,7 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
             cortex_m::asm::nop()
         }
 
-        self.spi()
-            .ifcr()
-            .write(|w| w.txtfc().clear().eotc().clear().suspc().clear());
-
-        self.inner.disable();
+        self.disable();
         true
     }
 
@@ -840,12 +914,11 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
     /// This must always be called when all data has been sent to
     /// properly terminate the transaction and reset the SPI peripheral.
     fn end_transaction(&mut self) {
-        // Result is only () or WouldBlock. Discard result.
         while !self.end_transaction_if_done() {}
     }
 
     fn abort_transaction(&mut self) {
-        self.inner.disable();
+        self.disable();
     }
 
     /// Deconstructs the SPI peripheral and returns the component parts.
@@ -879,14 +952,7 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
         }
     }
 
-    fn start_write<'a>(
-        &mut self,
-        words: &'a [W],
-    ) -> Result<Transaction<Write<'a, W>, W>, Error> {
-        assert!(
-            !words.is_empty(),
-            "Write buffer should not be non-zero length"
-        );
+    fn setup_write_mode(&mut self) -> Result<(), Error> {
         let communication_mode = self.inner.communication_mode();
         if communication_mode == CommunicationMode::SimplexReceiver {
             return Err(Error::InvalidOperation);
@@ -896,16 +962,25 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
             self.inner.set_dir_transmitter();
         }
 
+        Ok(())
+    }
+
+    fn start_write<'a>(
+        &mut self,
+        words: &'a [W],
+    ) -> Result<Transaction<Write<'a, W>, W>, Error> {
+        assert!(
+            !words.is_empty(),
+            "Write buffer should not be non-zero length"
+        );
+
+        self.setup_write_mode()?;
         self.setup_transaction(words.len());
 
         Ok(Transaction::<Write<'a, W>, W>::write(words))
     }
 
-    fn start_read<'a>(
-        &mut self,
-        buf: &'a mut [W],
-    ) -> Result<Transaction<Read<'a, W>, W>, Error> {
-        assert!(!buf.is_empty(), "Read buffer should not be non-zero length");
+    fn setup_read_mode(&self) -> Result<(), Error> {
         let communication_mode = self.inner.communication_mode();
         if communication_mode == CommunicationMode::SimplexTransmitter {
             return Err(Error::InvalidOperation);
@@ -915,9 +990,27 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
             self.inner.set_dir_receiver();
         }
 
+        Ok(())
+    }
+
+    fn start_read<'a>(
+        &mut self,
+        buf: &'a mut [W],
+    ) -> Result<Transaction<Read<'a, W>, W>, Error> {
+        assert!(!buf.is_empty(), "Read buffer should not be non-zero length");
+
+        self.setup_read_mode()?;
         self.setup_transaction(buf.len());
 
         Ok(Transaction::<Read<'a, W>, W>::read(buf))
+    }
+
+    fn check_transfer_mode(&mut self) -> Result<(), Error> {
+        if self.inner.communication_mode() != CommunicationMode::FullDuplex {
+            Err(Error::InvalidOperation)
+        } else {
+            Ok(())
+        }
     }
 
     fn start_transfer<'a>(
@@ -929,10 +1022,8 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
             !read.is_empty() && !write.is_empty(),
             "Transfer buffers should not be of zero length"
         );
-        if self.inner.communication_mode() != CommunicationMode::FullDuplex {
-            return Err(Error::InvalidOperation);
-        }
 
+        self.check_transfer_mode()?;
         self.setup_transaction(core::cmp::max(read.len(), write.len()));
 
         Ok(Transaction::<Transfer<'a, W>, W>::transfer(write, read))
@@ -946,9 +1037,7 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
             !words.is_empty(),
             "Transfer buffer should not be of zero length"
         );
-        if self.inner.communication_mode() != CommunicationMode::FullDuplex {
-            return Err(Error::InvalidOperation);
-        }
+        self.check_transfer_mode()?;
 
         self.setup_transaction(words.len());
 
