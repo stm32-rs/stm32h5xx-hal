@@ -12,7 +12,7 @@
 //! transfer) that is supported by the processor (ie. they're not tied to specific channels). All
 //! channels support direct and linked-buffer transfers. However, the channels do have different
 //! capabilities (see RM0492 Rev 3 section 15.3.2 for full details), notably that channels 0-5 can
-//! only service transfers in a linear address space, while channels 6 & 7 can service transfers
+//! only service transfers in a linear address space, while channels 6 & 7 can also service transfers
 //! using a 2D addressing scheme. Both GPDMA peripherals support the same requests/channel
 //! capabilities.
 //!
