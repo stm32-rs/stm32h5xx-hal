@@ -287,13 +287,13 @@ impl<'a, CH: DmaChannel> DmaTransfer<'a, CH> {
         S: ReadBuffer<Word: Word>,
         D: WriteBuffer<Word: Word>,
     {
-        let src_width = core::mem::size_of::<S>();
-        let dest_width = core::mem::size_of::<D>();
+        let src_width = core::mem::size_of::<S::Word>();
+        let dest_width = core::mem::size_of::<D::Word>();
 
         let (src_ptr, src_words) = unsafe { source.read_buffer() };
-        let src_size = core::mem::size_of::<S::Word>() * src_words;
+        let src_size = src_width * src_words;
         let (dest_ptr, dest_words) = unsafe { destination.write_buffer() };
-        let dest_size = core::mem::size_of::<D::Word>() * dest_words;
+        let dest_size = dest_width * dest_words;
 
         // Size must be aligned with destination width if source width is greater than destination
         // width and packing mode is used, therefore the maximum size must be dictated by
@@ -309,8 +309,6 @@ impl<'a, CH: DmaChannel> DmaTransfer<'a, CH> {
             assert!(src_size <= dest_size, "Transfer size ({src_size} bytes) will overflow the destination buffer ({dest_size} bytes)!");
             src_size
         };
-
-        // We also need to ensure that the destination
 
         Self::new::<S::Word, D::Word, MemoryToMemory>(
             channel, config, src_ptr, dest_ptr, size,
