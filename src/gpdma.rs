@@ -89,6 +89,8 @@ use embedded_dma::{ReadBuffer, Word as DmaWord, WriteBuffer};
 
 mod ch;
 pub mod config;
+#[cfg(feature = "gpdma-futures")]
+mod future;
 pub mod periph;
 
 pub use ch::{
@@ -145,6 +147,7 @@ impl<DMA: Instance> GpdmaExt<DMA> for DMA {
     }
 }
 
+#[allow(private_bounds)]
 pub trait Instance: Sealed + Deref<Target = gpdma1::RegisterBlock> {
     type Rec: ResetEnable;
 
