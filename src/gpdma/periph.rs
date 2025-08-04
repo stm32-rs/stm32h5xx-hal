@@ -258,6 +258,7 @@ where
     TX: DmaChannel,
     RX: DmaChannel,
 {
+    #[allow(clippy::type_complexity)]
     pub fn init_duplex_transfer<'a, S, D>(
         &'a mut self,
         tx_config: DmaConfig<MemoryToPeripheral, W, W>,
