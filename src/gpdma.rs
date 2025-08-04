@@ -256,10 +256,8 @@ where
     // Hold onto source and destination for the lifetime of the transfer to ensure that any
     // user implementations of ReadBuffer and WriteBuffer that are themselves references are held
     // for the duration of the transfer and so prevent access to the underlying data.
-    #[allow(dead_code)]
-    source: S,
-    #[allow(dead_code)]
-    destination: D,
+    _source: S,
+    _destination: D,
 }
 
 impl<'a, CH, S, D> DmaTransfer<'a, CH, S, D>
@@ -291,8 +289,8 @@ where
 
         Self {
             channel,
-            source,
-            destination,
+            _source: source,
+            _destination: destination,
         }
     }
 
