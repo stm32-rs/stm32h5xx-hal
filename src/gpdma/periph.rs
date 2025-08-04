@@ -7,7 +7,7 @@
 //!    encapsulate the logic for initializing these transfers.
 //!  - The [`DmaDuplex`] struct combines both TX and RX capabilities, allowing for full-duplex
 //!    operations.
-use core::{cell::Cell, marker::PhantomData};
+use core::marker::PhantomData;
 
 use crate::Sealed;
 
@@ -18,7 +18,7 @@ use super::{
 
 /// `PeriphTxBuffer` is a wrapper around a peripheral's transmit data register address, used to
 /// provide a WriteBuffer implementation for initiating memory-to-peripheral DMA transfers.
-struct PeriphTxBuffer<A: TxAddr<W>, W: Word> {
+pub struct PeriphTxBuffer<A: TxAddr<W>, W: Word> {
     _addr: PhantomData<A>,
     _word: PhantomData<W>,
 }
@@ -33,7 +33,7 @@ unsafe impl<A: TxAddr<W>, W: Word> WriteBuffer for PeriphTxBuffer<A, W> {
 
 /// `PeriphRxBuffer` is a wrapper around a peripheral's receive data register address, used to
 /// provide a ReadBuffer implementation for initiating peripheral-to-memory DMA transfers.
-struct PeriphRxBuffer<A: RxAddr<W>, W: Word> {
+pub struct PeriphRxBuffer<A: RxAddr<W>, W: Word> {
     _addr: PhantomData<A>,
     _word: PhantomData<W>,
 }
@@ -156,7 +156,7 @@ where
         &'a mut self,
         config: DmaConfig<PeripheralToMemory, W, W>,
         destination: D,
-    ) -> DmaTransfer<'a, CH>
+    ) -> DmaTransfer<'a, CH, PeriphRxBuffer<PERIPH, W>, D>
     where
         D: WriteBuffer<Word = W>,
     {
@@ -209,7 +209,7 @@ where
         &'a mut self,
         config: DmaConfig<MemoryToPeripheral, W, W>,
         source: S,
-    ) -> DmaTransfer<'a, CH>
+    ) -> DmaTransfer<'a, CH, S, PeriphTxBuffer<PERIPH, W>>
     where
         S: ReadBuffer<Word = W>,
     {
@@ -226,8 +226,8 @@ where
 /// peripheral-to-memory DMA transaction for to enable setting up of full-duplex transmission and
 /// reception of data. Used by peripheral DMA implementations.
 pub struct DmaDuplex<PERIPH, W, TX, RX> {
-    tx: Cell<DmaTx<PERIPH, W, TX>>,
-    rx: Cell<DmaRx<PERIPH, W, RX>>,
+    tx: DmaTx<PERIPH, W, TX>,
+    rx: DmaRx<PERIPH, W, RX>,
 }
 
 impl<PERIPH, W, TX, RX> DmaDuplex<PERIPH, W, TX, RX>
@@ -239,13 +239,13 @@ where
 {
     pub fn new(tx: TX, rx: RX) -> Self {
         Self {
-            tx: Cell::new(DmaTx::from(tx)),
-            rx: Cell::new(DmaRx::from(rx)),
+            tx: DmaTx::from(tx),
+            rx: DmaRx::from(rx),
         }
     }
 
     pub fn free(self) -> (TX, RX) {
-        (self.tx.into_inner().free(), self.rx.into_inner().free())
+        (self.tx.free(), self.rx.free())
     }
 }
 
@@ -264,13 +264,16 @@ where
         rx_config: DmaConfig<PeripheralToMemory, W, W>,
         source: S,
         destination: D,
-    ) -> (DmaTransfer<'a, TX>, DmaTransfer<'a, RX>)
+    ) -> (
+        DmaTransfer<'a, TX, S, PeriphTxBuffer<PERIPH, W>>,
+        DmaTransfer<'a, RX, PeriphRxBuffer<PERIPH, W>, D>,
+    )
     where
         S: ReadBuffer<Word = W>,
         D: WriteBuffer<Word = W>,
     {
-        let tx = self.tx.get_mut().init_tx_transfer(tx_config, source);
-        let rx = self.rx.get_mut().init_rx_transfer(rx_config, destination);
+        let tx = self.tx.init_tx_transfer(tx_config, source);
+        let rx = self.rx.init_rx_transfer(rx_config, destination);
         (tx, rx)
     }
 }
