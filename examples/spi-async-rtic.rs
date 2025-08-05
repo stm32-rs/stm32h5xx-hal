@@ -3,9 +3,10 @@
 
 mod utilities;
 
+use embedded_dma::{ReadBuffer, WriteBuffer};
 use rtic::app;
 use stm32h5xx_hal::{
-    gpdma::{periph::DmaDuplex, DmaChannel0, DmaChannel1},
+    gpdma::{periph::DmaDuplex, DmaChannel0, DmaChannel1, Word},
     gpio::{Output, PA5},
     pac,
     prelude::*,
@@ -15,11 +16,51 @@ use stm32h5xx_hal::{
 use rtic_monotonics::systick::prelude::*;
 systick_monotonic!(Mono, 1000);
 
+// Buffer is used to manage a reference to a static buffer returned by the cortex_m::singleton!
+// macro and which can be with the DmaTransfer API (which requires passing ReadBuffer and
+// WriteBuffer implementations by value) and then used to access the buffer after the transfer has
+// completed.
+struct Buffer<T: Word + 'static, const N: usize> {
+    data: &'static mut [T; N],
+}
+
+impl<T, const N: usize> Buffer<T, N>
+where
+    T: Word + 'static,
+{
+    fn new(data: &'static mut [T; N]) -> Self {
+        Self { data }
+    }
+}
+
+unsafe impl<T, const N: usize> ReadBuffer for &mut Buffer<T, N>
+where
+    T: Word + 'static,
+{
+    type Word = T;
+
+    unsafe fn read_buffer(&self) -> (*const Self::Word, usize) {
+        (self.data.as_ptr(), N)
+    }
+}
+
+unsafe impl<T, const N: usize> WriteBuffer for &mut Buffer<T, N>
+where
+    T: Word + 'static,
+{
+    type Word = T;
+
+    unsafe fn write_buffer(&mut self) -> (*mut Self::Word, usize) {
+        (self.data.as_mut_ptr(), N)
+    }
+}
+
 #[app(device = pac, dispatchers = [USART1, USART2], peripherals = true)]
 mod app {
 
+    use core::cell::Cell;
+
     use cortex_m::singleton;
-    use embedded_dma::{ReadBuffer, WriteBuffer};
     use stm32h5::stm32h503::{GPDMA1, NVIC};
 
     use super::*;
@@ -34,8 +75,8 @@ mod app {
             pac::SPI2,
             DmaDuplex<pac::SPI2, u8, DmaChannel0<GPDMA1>, DmaChannel1<GPDMA1>>,
         >,
-        source: &'static mut [u8; 40],
-        dest: &'static mut [u8; 40],
+        source: Cell<Buffer<u8, 40>>,
+        dest: Cell<Buffer<u8, 40>>,
     }
 
     #[init]
@@ -86,6 +127,9 @@ mod app {
             NVIC::unmask(pac::interrupt::GPDMA1_CH1);
         };
 
+        let src = singleton!(: [u8; 40] = [0; 40]).unwrap();
+        let dest = singleton!(: [u8; 40] = [0; 40]).unwrap();
+
         tick::spawn().unwrap();
         spi_transfer::spawn().unwrap();
         (
@@ -93,8 +137,8 @@ mod app {
             Local {
                 led,
                 spi,
-                source: singleton!(: [u8; 40] = [0; 40]).unwrap(),
-                dest: singleton!(: [u8; 40] = [0; 40]).unwrap(),
+                source: Cell::new(Buffer::new(src)),
+                dest: Cell::new(Buffer::new(dest)),
             },
         )
     }
@@ -113,19 +157,19 @@ mod app {
     async fn spi_transfer(ctx: spi_transfer::Context) {
         loop {
             log::info!("Starting SPI transfer");
-            ctx.local.source.fill(*ctx.local.count as u8);
-            ctx.local.dest.fill(0);
 
-            let (src_ptr, src_len) = unsafe { ctx.local.source.read_buffer() };
-            let src = unsafe { core::slice::from_raw_parts(src_ptr, src_len) };
-            let (dest_ptr, dest_len) = unsafe { ctx.local.dest.write_buffer() };
-            let dest =
-                unsafe { core::slice::from_raw_parts_mut(dest_ptr, dest_len) };
+            let src = ctx.local.source.get_mut();
+            let dest = ctx.local.dest.get_mut();
+            src.data.fill(*ctx.local.count as u8);
+            dest.data.fill(0);
 
             *ctx.local.count += 1;
             ctx.local.spi.transfer_dma(src, dest).await.unwrap();
 
-            assert_eq!(*ctx.local.source, *ctx.local.dest);
+            assert_eq!(
+                *ctx.local.source.get_mut().data,
+                *ctx.local.dest.get_mut().data
+            );
             log::info!("Success!");
             Mono::delay(1000.millis()).await;
         }

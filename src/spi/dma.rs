@@ -13,7 +13,7 @@ use futures_util::task::AtomicWaker;
 use crate::{
     gpdma::{
         config::DmaConfig,
-        periph::{DmaDuplex, DmaRx, DmaTx, RxAddr, TxAddr},
+        periph::{DmaDuplex, DmaRx, DmaTx, PeriphRxBuffer, PeriphTxBuffer, RxAddr, TxAddr},
         DmaChannel, DmaTransfer, Error as DmaError, Word as DmaWord,
     },
     interrupt,
@@ -231,7 +231,7 @@ where
     pub fn start_dma_read<'a, D>(
         &'a mut self,
         mut destination: D,
-    ) -> Result<DmaTransfer<'a, CH>, Error>
+    ) -> Result<DmaTransfer<'a, CH, PeriphRxBuffer<SPI, W>, D>, Error>
     where
         D: WriteBuffer<Word = W>,
     {
@@ -273,7 +273,7 @@ where
     pub fn start_dma_write<'a, S>(
         &'a mut self,
         source: S,
-    ) -> Result<DmaTransfer<'a, CH>, Error>
+    ) -> Result<DmaTransfer<'a, CH, S, PeriphTxBuffer<SPI, W>>, Error>
     where
         S: ReadBuffer<Word = W>,
     {
@@ -313,11 +313,13 @@ where
     TX: DmaChannel,
     RX: DmaChannel,
 {
+    #[allow(clippy::type_complexity)]
     pub fn start_dma_duplex_transfer<'a, S, D>(
         &'a mut self,
         source: S,
         mut destination: D,
-    ) -> Result<(DmaTransfer<'a, TX>, DmaTransfer<'a, RX>), Error>
+    ) -> Result<(DmaTransfer<'a, TX, S, PeriphTxBuffer<SPI, W>>,
+        DmaTransfer<'a, RX, PeriphRxBuffer<SPI, W>, D>), Error>
     where
         S: ReadBuffer<Word = W>,
         D: WriteBuffer<Word = W>,
@@ -363,6 +365,7 @@ where
         let (tx, rx) = self.start_dma_duplex_transfer(source, destination)?;
         let (tx, rx) = (tx.into_future(), rx.into_future());
         let results = join!(tx, rx);
+
         let result = results.0.and(results.1);
 
         self.finish_transfer_async(result).await
