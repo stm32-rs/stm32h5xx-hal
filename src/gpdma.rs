@@ -82,6 +82,7 @@ use crate::{
 };
 use core::{
     marker::PhantomData,
+    mem,
     ops::Deref,
     sync::atomic::{fence, Ordering},
 };
@@ -252,12 +253,8 @@ where
     D: WriteBuffer<Word: Word>,
 {
     channel: &'a mut CH,
-
-    // Hold onto source and destination for the lifetime of the transfer to ensure that any
-    // user implementations of ReadBuffer and WriteBuffer that are themselves references are held
-    // for the duration of the transfer and so prevent access to the underlying data.
-    _source: S,
-    _destination: D,
+    source: S,
+    destination: D,
 }
 
 impl<'a, CH, S, D> DmaTransfer<'a, CH, S, D>
@@ -289,8 +286,8 @@ where
 
         Self {
             channel,
-            _source: source,
-            _destination: destination,
+            source,
+            destination,
         }
     }
 
@@ -501,13 +498,12 @@ where
 
     /// Blocks waiting for a transfer to complete. Returns an error if one occurred during the
     /// transfer.
-    pub fn wait_for_transfer_complete(self) -> Result<(), Error> {
+    pub fn wait_for_transfer_complete(&mut self) -> Result<(), Error> {
         let result = self.channel.wait_for_transfer_complete();
         // Preserve the instruction and bus sequence of the preceding operation and
         // the subsequent buffer access.
         fence(Ordering::SeqCst);
 
-        core::mem::forget(self); // Prevents self from being dropped and attempting to abort
         result
     }
 
@@ -529,8 +525,28 @@ where
     }
 
     /// Abort a transaction and wait for it to suspend the transfer before resetting the channel
-    pub fn abort(self) {
-        // Allow Drop implementation to handle transfer abortion
+    pub fn abort(&mut self) {
+        if self.is_running() {
+            self.channel.abort();
+        }
+
+        self.disable_interrupts();
+
+        // Preserve the instruction and bus sequence of the preceding operation and
+        // the subsequent buffer access.
+        fence(Ordering::SeqCst);
+    }
+
+    pub fn free(mut self) -> (S, D) {
+        self.abort();
+        let (src, dest) = unsafe {
+            (
+                core::ptr::read(&self.source),
+                core::ptr::read(&self.destination),
+            )
+        };
+        mem::forget(self);
+        (src, dest)
     }
 }
 
@@ -541,14 +557,6 @@ where
     D: WriteBuffer<Word: Word>,
 {
     fn drop(&mut self) {
-        if self.is_running() {
-            self.channel.abort();
-        }
-
-        self.disable_interrupts();
-
-        // Preserve the instruction and bus sequence of the preceding operation and
-        // the subsequent buffer access.
-        fence(Ordering::SeqCst);
+        self.abort();
     }
 }
