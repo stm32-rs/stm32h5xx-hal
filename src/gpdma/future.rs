@@ -2,10 +2,10 @@ use core::{
     future::{Future, IntoFuture},
     ops::{Deref, DerefMut},
     pin::Pin,
-    sync::atomic::{fence, Ordering},
     task::{Context, Poll},
 };
 
+use embedded_dma::{ReadBuffer, WriteBuffer};
 use futures_util::task::AtomicWaker;
 
 use crate::interrupt;
@@ -13,11 +13,11 @@ use crate::stm32::{GPDMA1, GPDMA2};
 
 use super::{
     ch::{
-        Channel, ChannelRegs, DmaChannel0, DmaChannel1,
-        DmaChannel2, DmaChannel3, DmaChannel4, DmaChannel5, DmaChannel6,
-        DmaChannel7, DmaChannelRef,
+        Channel, ChannelRegs, DmaChannel0, DmaChannel1, DmaChannel2,
+        DmaChannel3, DmaChannel4, DmaChannel5, DmaChannel6, DmaChannel7,
+        DmaChannelRef,
     },
-    DmaTransfer, Error, Instance,
+    DmaTransfer, Error, Instance, Word,
 };
 
 #[allow(private_bounds)]
@@ -32,65 +32,67 @@ where
 }
 
 #[allow(private_bounds)]
-impl<'a, CH> IntoFuture for DmaTransfer<'a, CH>
+impl<'a, CH, S, D> IntoFuture for DmaTransfer<'a, CH, S, D>
 where
     CH: DmaChannel,
+    S: ReadBuffer<Word: Word>,
+    D: WriteBuffer<Word: Word>,
 {
     type Output = Result<(), Error>;
-    type IntoFuture = DmaTransferFuture<'a, CH>;
+    type IntoFuture = DmaTransferFuture<'a, CH, S, D>;
 
-    fn into_future(self) -> DmaTransferFuture<'a, CH> {
+    fn into_future(mut self) -> DmaTransferFuture<'a, CH, S, D> {
         self.enable_interrupts();
         DmaTransferFuture { transfer: self }
     }
 }
 
-pub struct DmaTransferFuture<'a, CH: DmaChannel> {
-    transfer: DmaTransfer<'a, CH>,
-}
-
-impl<'a, CH> Deref for DmaTransferFuture<'a, CH>
+pub struct DmaTransferFuture<'a, CH, S, D>
 where
     CH: DmaChannel,
+    S: ReadBuffer<Word: Word>,
+    D: WriteBuffer<Word: Word>,
 {
-    type Target = DmaTransfer<'a, CH>;
+    transfer: DmaTransfer<'a, CH, S, D>,
+}
+
+impl<'a, CH, S, D> Deref for DmaTransferFuture<'a, CH, S, D>
+where
+    CH: DmaChannel,
+    S: ReadBuffer<Word: Word>,
+    D: WriteBuffer<Word: Word>,
+{
+    type Target = DmaTransfer<'a, CH, S, D>;
 
     fn deref(&self) -> &Self::Target {
         &self.transfer
     }
 }
 
-impl<'a, CH> DerefMut for DmaTransferFuture<'a, CH>
+impl<'a, CH, S, D> DerefMut for DmaTransferFuture<'a, CH, S, D>
 where
     CH: DmaChannel,
+    S: ReadBuffer<Word: Word>,
+    D: WriteBuffer<Word: Word>,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.transfer
     }
 }
 
-impl<'a, CH> Drop for DmaTransferFuture<'a, CH>
+impl<'a, CH, S, D> Unpin for DmaTransferFuture<'a, CH, S, D>
 where
     CH: DmaChannel,
+    S: ReadBuffer<Word: Word>,
+    D: WriteBuffer<Word: Word>,
 {
-    fn drop(&mut self) {
-        if self.is_running() {
-            self.channel.abort();
-        }
-
-        self.disable_interrupts();
-
-        // Preserve the instruction and bus sequence of the preceding operation and
-        // the subsequent buffer access.
-        fence(Ordering::SeqCst);
-    }
 }
 
-impl<'a, CH: DmaChannel> Unpin for DmaTransferFuture<'a, CH> {}
-
-impl<'a, CH> Future for DmaTransferFuture<'a, CH>
+impl<'a, CH, S, D> Future for DmaTransferFuture<'a, CH, S, D>
 where
     CH: DmaChannel + ChannelWaker,
+    S: ReadBuffer<Word: Word>,
+    D: WriteBuffer<Word: Word>,
 {
     type Output = Result<(), Error>;
 
@@ -113,7 +115,7 @@ where
 {
     #[inline(always)]
     fn handle_interrupt() {
-        let ch = Self::new();
+        let mut ch = Self::new();
         ch.disable_transfer_interrupts();
         ch.waker().wake();
     }
