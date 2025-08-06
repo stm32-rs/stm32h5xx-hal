@@ -73,6 +73,7 @@ stm32h5 = { package = "stm32h5", version = "0.16.0" }
 fugit = "0.3.7"
 embedded-dma = "0.2"
 embedded-hal = "1.0.0"
+embedded-hal-async = "1.0.0"
 defmt = { version = "1.0.0", optional = true }
 paste = "1.0.15"
 log = { version = "0.4.20", optional = true}
@@ -93,6 +94,8 @@ cortex-m-semihosting = "0.5.0"
 panic-itm = { version = "~0.4.1" }
 panic-probe = "0.3.2"
 panic-semihosting = "0.6"
+rtic = { version = "2.2", features = ["thumbv8main-backend"] }
+rtic-monotonics = { version = "2.0", features = ["cortex-m-systick"]}
 usbd-serial = "0.2.2"
 usb-device = { version = "0.3.2", features = ["defmt", "log"] }
 

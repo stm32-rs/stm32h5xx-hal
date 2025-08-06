@@ -15,6 +15,7 @@ impl HalError for Error {
             Error::TransactionAlreadyStarted => ErrorKind::Other,
             Error::BufferTooBig { max_size: _ } => ErrorKind::Other,
             Error::InvalidOperation => ErrorKind::Other,
+            Error::DmaError(_) => ErrorKind::Other,
         }
     }
 }
