@@ -1,9 +1,6 @@
 # Cross doesn't seem to look for package specific configurations when invoked in a workspace so
 # we put the default target in Cross.toml
 
-[build]
-default-target = "aarch64-unknown-linux-gnu"
-
 # Allow usage of locally built version of the cross docker image that matches the host architecture
 # e.g. Building a linux/arm64 image for an AARCH64 host allows native execution of the image.
 # Specifying the toolchain for a linux/arm64 image means the correct toolchain is used on that
