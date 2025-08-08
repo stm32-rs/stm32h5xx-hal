@@ -131,7 +131,7 @@ where
     DMA: Instance,
     CH: ChannelRegs,
 {
-    pub(super) fn new() -> Self {
+    pub(super) unsafe fn new_unsafe() -> Self {
         DmaChannelRef {
             _dma: PhantomData,
             _ch: PhantomData,

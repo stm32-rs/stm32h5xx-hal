@@ -39,7 +39,9 @@ use super::{
     DmaTransfer, Error, Instance, Word,
 };
 
-// This trait is defined to be bound by ChannelWaker when futures are enabled via the
+/// DmaChannel trait provides the API contract that all GPDMA channels exposed to the user
+/// implement.
+// Note: This trait is defined to be bound by ChannelWaker when futures are enabled via the
 // `gpdma-futures` feature. This is to ensure that the waker associated with a channel can
 // be accessed from the interrupt handler and the DmaTransfer `poll` function.
 // Specifically, this alternate definition is needed to ensure that the DmaChannel implementations
@@ -150,6 +152,7 @@ where
 {
     #[inline(always)]
     fn handle_interrupt() {
+        // Safety:
         // This creates a DmaChannelRef instance for channel N, which is be a duplicate to the
         // DmaChannelRef instance that is held as a mutable reference in the DmaTransfer struct
         // while a transfer is in progress. However, it is only used to disable the transfer
@@ -159,7 +162,7 @@ where
         // When the DmaTransfer struct is dropped, interrupts are disabled for the channel,
         // preventing this interrupt from being triggered. Interrupts are only enabled when the
         // transfer is awaited (calling IntoFuture::into_future).
-        let mut ch = Self::new();
+        let mut ch = unsafe { Self::new_unsafe() };
 
         // This is a single volatile write to the channel's interrupt status register to disable
         // interrupts for the channel so this interrupt doesn't trigger again while the transfer
