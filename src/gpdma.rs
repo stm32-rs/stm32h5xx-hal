@@ -90,6 +90,8 @@ use embedded_dma::{ReadBuffer, Word as DmaWord, WriteBuffer};
 
 mod ch;
 pub mod config;
+#[cfg(feature = "gpdma-futures")]
+mod future;
 pub mod periph;
 
 pub use ch::{
@@ -146,6 +148,7 @@ impl<DMA: Instance> GpdmaExt<DMA> for DMA {
     }
 }
 
+#[allow(private_bounds)]
 pub trait Instance: Sealed + Deref<Target = gpdma1::RegisterBlock> {
     type Rec: ResetEnable;
 
@@ -228,16 +231,20 @@ impl<DMA: Instance> DmaChannels<DMA> {
     /// Splits the DMA peripheral into channels.
     pub(super) fn new(_regs: DMA, rec: DMA::Rec) -> Self {
         let _ = rec.reset().enable();
-        Self(
-            DmaChannel0::new(),
-            DmaChannel1::new(),
-            DmaChannel2::new(),
-            DmaChannel3::new(),
-            DmaChannel4::new(),
-            DmaChannel5::new(),
-            DmaChannel6::new(),
-            DmaChannel7::new(),
-        )
+        // Safety: The channels are only initialized for user code here once, so no copies can be
+        // made available outside this module.
+        unsafe {
+            Self(
+                DmaChannel0::new_unsafe(),
+                DmaChannel1::new_unsafe(),
+                DmaChannel2::new_unsafe(),
+                DmaChannel3::new_unsafe(),
+                DmaChannel4::new_unsafe(),
+                DmaChannel5::new_unsafe(),
+                DmaChannel6::new_unsafe(),
+                DmaChannel7::new_unsafe(),
+            )
+        }
     }
 }
 
