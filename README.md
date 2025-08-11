@@ -72,6 +72,20 @@ a number of fantastic resources available to help.
 - [Rust Embedded FAQ](https://docs.rust-embedded.org/faq.html)
 - [rust-embedded/awesome-embedded-rust](https://github.com/rust-embedded/awesome-embedded-rust)
 
+## Running unit tests
+
+If you're on a linux host, you can simply run unit tests with:
+
+    cargo test --target x86_64-unknown-linux-gnu --tests --features stm32h503
+
+If you're not, you'll need to install [`cross`](https://github.com/cross-rs/cross), which is a cross compilation tool. See the `cross` instructions for details of installation and use. Once that is installed, using `cross test` will run the unit tests within a docker image.
+
+Running tests with `cross`:
+
+    cross test --target x86_64-unknown-linux-gnu --tests --features stm32h503
+
+`cross` will automatically download the relevant docker image and install the correct rust toolchain.
+
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md). Note: this will be populated once the first crates have been
