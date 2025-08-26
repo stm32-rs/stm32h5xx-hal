@@ -12,7 +12,7 @@ use core::marker::PhantomData;
 
 use crate::stm32::{TIM1, TIM2, TIM3, TIM6, TIM7};
 #[cfg(feature = "rm0481")]
-use crate::stm32::{TIM12, TIM15, TIM4, TIM5, TIM8};
+use crate::stm32::{/*TIM12, */TIM15, TIM4, TIM5, TIM8}; // TODO: TIM12 seems to be missing for 523's pac, re add once fixed
 
 use cast::{u16, u32};
 use void::Void;
@@ -46,7 +46,7 @@ impl_tim_ker_ck! {
 
 #[cfg(feature = "rm0481")]
 impl_tim_ker_ck! {
-    timx_ker_ck: TIM4, TIM5, TIM12
+    timx_ker_ck: TIM4, TIM5 //TIM12 // TODO: TIM12 seems to be missing for 523's pac, re add once fixed
     timy_ker_ck: TIM8, TIM15
 }
 
@@ -412,7 +412,7 @@ hal! {
     TIM5: (tim5, Tim5, u32),
 
     // General-purpose
-    TIM12: (tim12, Tim12, u16),
+    //TIM12: (tim12, Tim12, u16), // TODO: TIM12 seems to be missing for 523's pac, re add once fixed
 
     // General-purpose
     TIM15: (tim15, Tim15, u16),
