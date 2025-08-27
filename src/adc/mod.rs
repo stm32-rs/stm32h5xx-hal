@@ -18,6 +18,11 @@ use core::ops::Deref;
 use embedded_hal::delay::DelayNs;
 
 use crate::rcc::rec::AdcDacClkSelGetter;
+
+#[cfg(feature = "rm0492")]
+use crate::stm32::{ADC1, ADC1 as ADCC};
+
+#[cfg(feature = "rm0481")]
 use crate::stm32::{ADC1, ADC2, ADCC};
 
 use crate::pwr::{self, VoltageScale};
@@ -32,9 +37,13 @@ pub trait Instance:
 }
 
 impl crate::Sealed for ADC1 {}
+
+#[cfg(feature = "rm0481")]
 impl crate::Sealed for ADC2 {}
 
 impl Instance for ADC1 {}
+
+#[cfg(feature = "rm0481")]
 impl Instance for ADC2 {}
 
 #[cfg(feature = "defmt")]
@@ -175,7 +184,7 @@ impl AdcCalLinear {
 /// Vref internal signal
 #[derive(Default)]
 pub struct Vrefint;
-/// Vbat internal signal
+/// Vbat/4 (Vbat pin input voltage divided by 4) internal signal
 #[derive(Default)]
 pub struct Vbat;
 /// Internal temperature sensor
@@ -239,13 +248,48 @@ fn kernel_clk_unwrap(
     }
 }
 
-// ADC12 is a unique case where a single reset line is used to control two
-// peripherals that have separate peripheral definitions in the SVD.
+#[cfg(feature = "rm0492")]
+pub fn adc1(
+    adc1: ADC1,
+    f_adc: impl Into<Hertz>,
+    delay: &mut impl DelayNs,
+    prec: rec::Adc,
+    clocks: &CoreClocks,
+    pwrcfg: &pwr::PowerConfiguration,
+) -> Adc<ADC1, Disabled> {
+    // Consume ADC register block, produce ADC1/2 with default settings
+    let mut adc1 = Adc::<ADC1, Disabled>::default_from_rb(adc1);
+
+    // Check adc_ker_ck_input
+    kernel_clk_unwrap(&prec, clocks);
+
+    // Enable AHB clock
+    let prec = prec.enable();
+
+    // Power Down
+    adc1.power_down();
+
+    // Reset peripheral
+    let prec = prec.reset();
+
+    // Power Up, Preconfigure and Calibrate
+    adc1.power_up(delay);
+    adc1.configure_clock(f_adc.into(), prec, clocks, pwrcfg); // ADC12_COMMON
+    adc1.preconfigure();
+    adc1.calibrate();
+
+    // From RM0481:
+    // This option bit must be set to 1 when ADCx_INP0 or ADCx_INN1 channel is selected
+    adc1.rb.or().modify(|_, w| w.op0().set_bit());
+
+    adc1
+}
 
 /// Initialise ADC12 together
 ///
 /// Sets all configurable parameters to one-shot defaults,
 /// performs a boot-time calibration.
+#[cfg(feature = "rm0481")]
 pub fn adc12(
     adc1: ADC1,
     adc2: ADC2,
@@ -284,26 +328,10 @@ pub fn adc12(
 
     // From RM0481:
     // This option bit must be set to 1 when ADCx_INP0 or ADCx_INN1 channel is selected
-    adc2.rb.or().modify(|_, w| w.op0().set_bit());
+    adc1.rb.or().modify(|_, w| w.op0().set_bit());
     adc2.rb.or().modify(|_, w| w.op0().set_bit());
 
     (adc1, adc2)
-}
-
-/// Free both ADC1 and ADC2 along with PREC.
-///
-/// Since ADC1 and ADC2 are controlled together, they are freed together.
-pub fn free_adc12<ED>(
-    adc1: Adc<ADC1, ED>,
-    adc2: Adc<ADC2, ED>,
-) -> (ADC1, ADC2, rec::Adc) {
-    (
-        adc1.rb,
-        adc2.rb,
-        rec::Adc {
-            _marker: PhantomData,
-        },
-    )
 }
 
 impl<ADC: Instance> AdcExt<ADC> for ADC {
