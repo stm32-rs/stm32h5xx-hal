@@ -52,7 +52,7 @@ pub mod prelude;
 #[macro_use]
 mod macros;
 
-#[cfg(feature = "device-selected")]
+#[cfg(all(feature = "device-selected", feature = "adc"))]
 pub mod adc;
 
 #[cfg(feature = "device-selected")]
