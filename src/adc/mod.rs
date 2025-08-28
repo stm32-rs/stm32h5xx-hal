@@ -7,7 +7,8 @@
 //!
 //! - [Reading a voltage using ADC1](https://github.com/stm32-rs/stm32h5xx-hal/blob/master/examples/adc.rs)
 //! - [Reading a temperature using ADC2](https://github.com/stm32-rs/stm32h5xx-hal/blob/master/examples/temperature.rs)
-
+//!
+//! Originally from https://github.com/stm32-rs/stm32h7xx-hal
 mod h5;
 
 use core::convert::Infallible;
@@ -15,10 +16,9 @@ use core::marker::PhantomData;
 use core::ops::Deref;
 
 use embedded_hal::delay::DelayNs;
-use stm32h5::stm32h523::ADCC;
 
 use crate::rcc::rec::AdcDacClkSelGetter;
-use crate::stm32::{ADC1, ADC2};
+use crate::stm32::{ADC1, ADC2, ADCC};
 
 use crate::pwr::{self, VoltageScale};
 //use crate::rcc::rec::AdcClkSelGetter;
@@ -36,6 +36,9 @@ impl crate::Sealed for ADC2 {}
 
 impl Instance for ADC1 {}
 impl Instance for ADC2 {}
+
+#[cfg(feature = "defmt")]
+use defmt::{assert, panic};
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -74,7 +77,6 @@ pub struct Adc<ADC, ED> {
     rb: ADC,
     sample_time: AdcSampleTime,
     resolution: Resolution,
-    lshift: AdcLshift,
     clock: Hertz,
     current_channel: Option<u8>,
     _enabled: PhantomData<ED>,
@@ -150,27 +152,6 @@ impl From<AdcSampleTime> for u8 {
     }
 }
 
-/// ADC LSHIFT\[3:0\] of the converted value
-///
-/// Only values in range of 0..=15 are allowed.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct AdcLshift(u8);
-
-impl AdcLshift {
-    pub fn new(lshift: u8) -> Self {
-        if lshift > 15 {
-            panic!("LSHIFT[3:0] must be in range of 0..=15");
-        }
-
-        AdcLshift(lshift)
-    }
-
-    pub fn value(self) -> u8 {
-        self.0
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct AdcCalOffset(u8);
@@ -219,18 +200,13 @@ pub trait AdcExt<ADC>: Sized {
 
 /// Stored ADC config can be restored using the `Adc::restore_cfg` method
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub struct StoredConfig(AdcSampleTime, Resolution, AdcLshift);
+pub struct StoredConfig(AdcSampleTime, Resolution);
 
 #[cfg(feature = "defmt")]
 impl defmt::Format for StoredConfig {
     fn format(&self, fmt: defmt::Formatter) {
-        defmt::write!(
-            fmt,
-            "StoredConfig({:?}, {:?}, {:?})",
-            self.0,
-            defmt::Debug2Format(&self.1),
-            self.2
-        )
+        let StoredConfig(sample_time, res) = &self;
+        defmt::write!(fmt, "StoredConfig({:?}, {:?})", sample_time, res)
     }
 }
 
@@ -341,7 +317,7 @@ impl<ADC: Instance> AdcExt<ADC> for ADC {
         clocks: &CoreClocks,
         pwrcfg: &pwr::PowerConfiguration,
     ) -> Adc<ADC, Disabled> {
-        Adc::<ADC, Disabled>::adc(self, f_adc, delay, prec, clocks, pwrcfg)
+        Adc::<ADC, Disabled>::new(self, f_adc, delay, prec, clocks, pwrcfg)
     }
 }
 
@@ -350,7 +326,7 @@ impl<ADC: Instance> Adc<ADC, Disabled> {
     ///
     /// Sets all configurable parameters to one-shot defaults,
     /// performs a boot-time calibration.
-    pub fn adc(
+    pub fn new(
         adc: ADC,
         f_adc: impl Into<Hertz>,
         delay: &mut impl DelayNs,
@@ -385,7 +361,6 @@ impl<ADC: Instance> Adc<ADC, Disabled> {
             rb,
             sample_time: AdcSampleTime::default(),
             resolution: Resolution::TwelveBit,
-            lshift: AdcLshift::default(),
             clock: Hertz::from_raw(0),
             current_channel: None,
             _enabled: PhantomData,
@@ -558,7 +533,6 @@ impl<ADC: Instance> Adc<ADC, Disabled> {
             rb: self.rb,
             sample_time: self.sample_time,
             resolution: self.resolution,
-            lshift: self.lshift,
             clock: self.clock,
             current_channel: None,
             _enabled: PhantomData,
@@ -614,14 +588,16 @@ impl<ADC: Instance> Adc<ADC, Enabled> {
         let chan = PIN::channel();
         assert!(chan <= 19);
 
+        // TODO: Move to ADC init?
         // Set resolution
         self.rb
             .cfgr()
             .modify(|_, w| unsafe { w.res().bits(self.get_resolution() as _) });
-        // Set discontinuous mode
+
+        // TODO: Move to ADC init?
         self.rb
             .cfgr()
-            .modify(|_, w| w.cont().clear_bit().discen().set_bit());
+            .modify(|_, w| w.cont().single().discen().disabled());
 
         self.start_conversion_common(chan);
     }
@@ -643,8 +619,18 @@ impl<ADC: Instance> Adc<ADC, Enabled> {
         self.current_channel = None;
 
         // Retrieve result
-        let result = self.rb.dr().read().rdata().bits();
+        let result = self.current_sample();
         Ok(result)
+    }
+
+    /// Read the current value in the data register
+    ///
+    /// This simply returns whatever value is in the data register without blocking.
+    /// Use [Self::read_sample] if you want to wait for any ongoing conversion to finish.
+    ///
+    /// NOTE: Depending on OVRMOD the data register acts like a FIFO queue with three stages
+    pub fn current_sample(&mut self) -> u16 {
+        self.rb.dr().read().rdata().bits()
     }
 
     fn check_conversion_conditions(&self) {
@@ -683,7 +669,6 @@ impl<ADC: Instance> Adc<ADC, Enabled> {
             rb: self.rb,
             sample_time: self.sample_time,
             resolution: self.resolution,
-            lshift: self.lshift,
             clock: self.clock,
             current_channel: None,
             _enabled: PhantomData,
@@ -694,18 +679,13 @@ impl<ADC: Instance> Adc<ADC, Enabled> {
 impl<ADC: Instance, ED> Adc<ADC, ED> {
     /// Save current ADC config
     pub fn save_cfg(&mut self) -> StoredConfig {
-        StoredConfig(
-            self.get_sample_time(),
-            self.get_resolution(),
-            self.get_lshift(),
-        )
+        StoredConfig(self.get_sample_time(), self.get_resolution())
     }
 
     /// Restore saved ADC config
     pub fn restore_cfg(&mut self, cfg: StoredConfig) {
         self.set_sample_time(cfg.0);
         self.set_resolution(cfg.1);
-        self.set_lshift(cfg.2);
     }
 
     /// Reset the ADC config to default, return existing config
@@ -713,7 +693,6 @@ impl<ADC: Instance, ED> Adc<ADC, ED> {
         let cfg = self.save_cfg();
         self.set_sample_time(AdcSampleTime::default());
         self.set_resolution(Resolution::TwelveBit);
-        self.set_lshift(AdcLshift::default());
         cfg
     }
 
@@ -744,7 +723,7 @@ impl<ADC: Instance, ED> Adc<ADC, ED> {
             Resolution::TwelveBit => 12,
         };
 
-        let cycles = (sample_cycles_x2 + 1) / 2 + sar_cycles;
+        let cycles = sample_cycles_x2.div_ceil(2) + sar_cycles;
         Hertz::Hz(self.clock.to_Hz() / cycles)
     }
 
@@ -756,11 +735,6 @@ impl<ADC: Instance, ED> Adc<ADC, ED> {
     /// Get ADC sampling resolution
     pub fn get_resolution(&self) -> Resolution {
         self.resolution
-    }
-
-    /// Get ADC lshift value
-    pub fn get_lshift(&self) -> AdcLshift {
-        self.lshift
     }
 
     /// Set ADC sampling time
@@ -775,13 +749,6 @@ impl<ADC: Instance, ED> Adc<ADC, ED> {
         self.resolution = res;
     }
 
-    /// Set ADC lshift
-    ///
-    /// LSHIFT\[3:0\] must be in range of 0..=15
-    pub fn set_lshift(&mut self, lshift: AdcLshift) {
-        self.lshift = lshift;
-    }
-
     /// Returns the largest possible sample value for the current ADC configuration
     ///
     /// Using this value as the denominator when calculating
@@ -789,8 +756,7 @@ impl<ADC: Instance, ED> Adc<ADC, ED> {
     /// be avoided. Use the [slope](#method.slope) method instead.
     #[deprecated(since = "0.12.0", note = "See the slope() method instead")]
     pub fn max_sample(&self) -> u32 {
-        ((1 << self.get_resolution().number_of_bits() as u32) - 1)
-            << self.get_lshift().value() as u32
+        (1 << self.get_resolution().number_of_bits()) - 1
     }
 
     /// Returns the slope for the current ADC configuration. 1 LSB = Vref / slope
@@ -804,8 +770,7 @@ impl<ADC: Instance, ED> Adc<ADC, ED> {
     /// let v = adc.read(&ch).unwrap() as f32 * vref / adc.slope() as f32;
     /// ```
     pub fn slope(&self) -> u32 {
-        1 << (self.get_resolution().number_of_bits() as u32
-            + self.get_lshift().value() as u32)
+        1 << self.get_resolution().number_of_bits()
     }
 
     /// Returns the offset calibration value for single ended channel
@@ -831,8 +796,10 @@ where
 {
     type Error = Infallible;
 
+    // TODO: We are not really non-blocking
     fn read(&mut self, pin: &mut PIN) -> nb::Result<u16, Infallible> {
         self.start_conversion(pin);
-        self.read_sample()
+        let res = nb::block!(self.read_sample()).unwrap();
+        Ok(res)
     }
 }

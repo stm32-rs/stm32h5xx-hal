@@ -26,16 +26,16 @@ macro_rules! adc_internal {
 
                 /// Enables the internal voltage/sensor
                 /// ADC must be disabled.
-                pub fn enable(&mut self, _adc: &Adc<$INT_ADC, Disabled>) {
-
+                pub fn enable(&mut self, _adc: &mut Adc<$INT_ADC, Disabled>) {
+                    // TODO: This is not safe since we do not hold both adcs
                     let common = unsafe { ADCC::steal() };
 
                     common.ccr().modify(|_, w| w.$en().bit(true));
                 }
                 /// Disables the internal voltage/sdissor
                 /// ADC must be disabled.
-                pub fn disable(&mut self, _adc: &Adc<$INT_ADC, Disabled>) {
-
+                pub fn disable(&mut self, _adc: &mut Adc<$INT_ADC, Disabled>) {
+                    // TODO: This is not safe since we do not hold both adcs
                     let common = unsafe { ADCC::steal() };
 
                     common.ccr().modify(|_, w| w.$en().bit(false));
