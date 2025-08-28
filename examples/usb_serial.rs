@@ -31,7 +31,7 @@ fn main() -> ! {
     let pwrcfg = pwr.vos0().freeze();
     // Constrain and Freeze clock
     let rcc = dp.RCC.constrain();
-    let ccdr = rcc.sys_ck(250.MHz()).freeze(pwrcfg, &dp.SBS);
+    let ccdr = rcc.sys_ck(250.MHz()).freeze(&pwrcfg, &dp.SBS);
 
     let gpioa = dp.GPIOA.split(ccdr.peripheral.GPIOA);
 
