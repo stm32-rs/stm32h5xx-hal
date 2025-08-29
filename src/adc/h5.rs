@@ -54,13 +54,13 @@ macro_rules! adc_internal {
 
 #[cfg(feature = "rm0492")]
 impl Vddcore {
-    pub fn enable(_adc: &Adc<ADC1, Disabled>) {
+    pub fn enable(_adc: &mut Adc<ADC1, Disabled>) {
         let adc = unsafe { ADC1::steal() };
 
         adc.or().modify(|_, w| w.op1().set_bit());
     }
 
-    pub fn disable(_adc: &Adc<ADC1, Disabled>) {
+    pub fn disable(_adc: &mut Adc<ADC1, Disabled>) {
         let adc = unsafe { ADC1::steal() };
 
         adc.or().modify(|_, w| w.op1().clear_bit());
@@ -71,13 +71,13 @@ adc_pins!(ADC1, Vddcore => 16);
 
 #[cfg(feature = "rm0481")]
 impl Vddcore {
-    pub fn enable(_adc: &Adc<ADC2, Disabled>) {
+    pub fn enable(_adc: &mut Adc<ADC2, Disabled>) {
         let adc2 = unsafe { ADC1::steal() };
 
         adc2.or().modify(|_, w| w.op0().bit(true));
     }
 
-    pub fn disable(_adc: &Adc<ADC2, Disabled>) {
+    pub fn disable(_adc: &mut Adc<ADC2, Disabled>) {
         let adc2 = unsafe { ADC1::steal() };
 
         adc2.or().modify(|_, w| w.op0().bit(false));
