@@ -24,7 +24,7 @@ fn main() -> ! {
 
     // Constrain and Freeze clock
     let rcc = dp.RCC.constrain();
-    let ccdr = rcc.sys_ck(250.MHz()).freeze(pwrcfg, &dp.SBS);
+    let ccdr = rcc.sys_ck(250.MHz()).freeze(&pwrcfg, &dp.SBS);
 
     let channels = dp.GPDMA1.channels(ccdr.peripheral.GPDMA1);
 

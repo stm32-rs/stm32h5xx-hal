@@ -28,7 +28,7 @@ fn main() -> ! {
     // Constrain and Freeze clock
     info!("Setup RCC...                  ");
     let rcc = dp.RCC.constrain();
-    let ccdr = rcc.sys_ck(100.MHz()).freeze(pwrcfg, &dp.SBS);
+    let ccdr = rcc.sys_ck(100.MHz()).freeze(&pwrcfg, &dp.SBS);
 
     let gpiob = dp.GPIOB.split(ccdr.peripheral.GPIOB);
 
