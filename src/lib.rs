@@ -87,6 +87,7 @@ pub mod usb;
 
 #[cfg(feature = "device-selected")]
 pub mod gpdma;
+pub mod pwm;
 
 #[cfg(feature = "device-selected")]
 pub mod timer;
