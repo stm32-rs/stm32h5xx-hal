@@ -1019,22 +1019,23 @@ tim_hal! {
     pac::TIM1: (tim1, Tim1, u16, 16, DIR: cms, BDTR: bdtr, enabled, af1, clear_bit, clear_bit),
     pac::TIM2: (tim2, Tim2, u32, 32, DIR: cms),
     pac::TIM3: (tim3, Tim3, u16, 16, DIR: cms),
+    pac::TIM6: (tim6, Tim6, u16, 16),
+    pac::TIM7: (tim7, Tim7, u16, 16),
+}
+
+#[cfg(feature="rm0481")]
+tim_hal! {
     pac::TIM4: (tim4, Tim4, u16, 16, DIR: cms),
     pac::TIM5: (tim5, Tim5, u32, 32, DIR: cms),
     pac::TIM8: (tim8, Tim8, u16, 16, DIR: cms, BDTR: bdtr, enabled, af1, clear_bit, clear_bit),
-}
-#[cfg(feature = "rm0468")]
+    //pac::TIM12: (tim12, Tim12, u16, 16),
+    pac::TIM15: (tim15, Tim15, u16, 16, BDTR: bdtr, set_bit, af1, set_bit),    
+} // TODO: TIM12 seems to be missing for 523's pac, re add once fixed
+
+#[cfg(feature="h56x_h573")]
 tim_hal! {
-    pac::TIM23: (tim23, Tim23, u32, 32, DIR: cms),
-    pac::TIM24: (tim24, Tim24, u32, 32, DIR: cms),
-}
-tim_hal! {
-    pac::TIM12: (tim12, Tim12, u16, 16),
     pac::TIM13: (tim13, Tim13, u16, 16),
     pac::TIM14: (tim14, Tim14, u16, 16),
-}
-tim_hal! {
-    pac::TIM15: (tim15, Tim15, u16, 16, BDTR: bdtr, set_bit, af1, set_bit),
     pac::TIM16: (tim16, Tim16, u16, 16, BDTR: bdtr, set_bit, af1, set_bit),
     pac::TIM17: (tim17, Tim17, u16, 16, BDTR: bdtr, set_bit, af1, set_bit),
 }
@@ -1220,20 +1221,24 @@ macro_rules! tim_pin_hal {
     };
 }
 
-fn foo(tim: pac::TIM12) {
+fn foo(tim: pac::TIM1) {
     const C: u8 = 0;
     let value = 3;
     tim.psc().modify(|_, w| w.psc().set(value));
 
     tim.ccer().modify(|_, w| w.ccp(C).falling_edge());
+    tim.cr1().modify(|_, w| w.dir().down());
+    tim.cr1().modify(|_, w| w.cms().center_aligned3());
 }
 
 // Dual channel timers
+/*#[cfg(feature="rm0481")]
 tim_pin_hal! {
     pac::TIM12, u16:
         (C1, ccmr1_output, oc1pe, oc1m),
         (C2, ccmr1_output, oc2pe, oc2m),
-}
+}*/ // TODO: TIM12 seems to be missing for 523's pac, re add once fixed
+#[cfg(feature="rm0481")]
 tim_pin_hal! {
     pac::TIM15, u16, ccne:
         (C1, ccmr1_output, oc1pe, oc1m),
@@ -1241,15 +1246,19 @@ tim_pin_hal! {
 }
 
 // Single channel timers
+#[cfg(feature="h56x_h573")]
 tim_pin_hal! {
     pac::TIM13, u16: (C1, ccmr1_output, oc1pe, oc1m),
 }
+#[cfg(feature="h56x_h573")]
 tim_pin_hal! {
     pac::TIM14, u16: (C1, ccmr1_output, oc1pe, oc1m),
 }
+#[cfg(feature="h56x_h573")]
 tim_pin_hal! {
     pac::TIM16, u16: (C1, ccmr1_output, oc1pe, oc1m),
 }
+#[cfg(feature="h56x_h573")]
 tim_pin_hal! {
     pac::TIM17, u16: (C1, ccmr1_output, oc1pe, oc1m),
 }
@@ -1276,6 +1285,7 @@ tim_pin_hal! {
         (C3, ccmr2_output, oc3pe, oc3m),
         (C4, ccmr2_output, oc4pe, oc4m),
 }
+#[cfg(feature="rm0481")]
 tim_pin_hal! {
     pac::TIM4, u16:
         (C1, ccmr1_output, oc1pe, oc1m),
@@ -1283,6 +1293,7 @@ tim_pin_hal! {
         (C3, ccmr2_output, oc3pe, oc3m),
         (C4, ccmr2_output, oc4pe, oc4m),
 }
+#[cfg(feature="rm0481")]
 tim_pin_hal! {
     pac::TIM5, u32:
         (C1, ccmr1_output, oc1pe, oc1m),
@@ -1290,6 +1301,7 @@ tim_pin_hal! {
         (C3, ccmr2_output, oc3pe, oc3m),
         (C4, ccmr2_output, oc4pe, oc4m),
 }
+#[cfg(feature="rm0481")]
 tim_pin_hal! {
     pac::TIM8, u16, ccne:
         (C1, ccmr1_output, oc1pe, oc1m),

@@ -13,9 +13,12 @@ use core::marker::PhantomData;
 use crate::stm32::{TIM1, TIM2, TIM3, TIM6, TIM7};
 #[cfg(feature = "rm0481")]
 use crate::stm32::{
-    TIM12, TIM13, TIM14, TIM15, TIM16, TIM17, TIM4, TIM5, TIM8,
+     TIM4, TIM5, TIM8, /*TIM12,*/  TIM15, 
 }; // TODO: TIM12 seems to be missing for 523's pac, re add once fixed
-
+#[cfg(feature = "h56x_h573")]
+use crate::stm32::{
+    TIM13, TIM14, TIM16, TIM17,
+};
 use cast::{u16, u32};
 use void::Void;
 
@@ -48,8 +51,13 @@ impl_tim_ker_ck! {
 
 #[cfg(feature = "rm0481")]
 impl_tim_ker_ck! {
-    timx_ker_ck: TIM4, TIM5, TIM12, TIM13, TIM14 // TODO: TIM12 seems to be missing for 523's pac, re add once fixed
-    timy_ker_ck: TIM8, TIM15, TIM16, TIM17
+    timx_ker_ck: TIM4, TIM5 /*TIM12,*/ // TODO: TIM12 seems to be missing for 523's pac, re add once fixed
+    timy_ker_ck: TIM8, TIM15
+}
+
+#[cfg(feature = "h56x_h573")]
+impl_tim_ker_ck! {
+    timx_ker_ck: TIM13, TIM14
 }
 
 /// External trait for hardware timers

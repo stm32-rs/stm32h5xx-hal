@@ -1,5 +1,5 @@
 [target.thumbv8m.main-none-eabihf]
-runner = 'probe-rs run --connect-under-reset'
+runner = 'probe-rs run --chip STM32H523RETx'
 rustflags = [
   # LLD (shipped with the Rust toolchain) is used as the default linker
   "-C", "link-arg=-Tlink.x",
