@@ -198,6 +198,9 @@ pub trait FaultPins<TIM> {
     const INPUT: BreakInput;
 }
 
+/// ExternalTriggerPins is a trait that marks which GPIO pins may be used as external input trigger; it should not be used directly.
+pub trait ExternalTriggerPins<TIM> {}
+
 /// Channel wrapper
 pub struct Ch<const C: u8>;
 impl<const C: u8> Ch<C> {
