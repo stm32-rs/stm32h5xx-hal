@@ -9,7 +9,11 @@ use cortex_m_rt::entry;
 
 use embedded_hal_02::adc::OneShot;
 use stm32h5xx_hal::{
-    adc, delay::Delay, pac, prelude::*, rcc::rec::AdcDacClkSel,
+    adc::{self, AdcCommonExt},
+    delay::Delay,
+    pac,
+    prelude::*,
+    rcc::rec::AdcDacClkSel,
 };
 use utilities::logger::info;
 
@@ -50,6 +54,18 @@ fn main() -> ! {
     info!("");
 
     let mut delay = Delay::new(cp.SYST, &ccdr.clocks);
+
+    #[cfg(feature = "rm0481")]
+    let adc = dp
+        .ADCC
+        .claim(4.MHz(), ccdr.peripheral.ADC, &ccdr.clocks, &pwrcfg)
+        .claim_and_configure(dp.ADC1, &mut delay);
+
+    #[cfg(feature = "rm0492")]
+    let adc = dp
+        .ADC1
+        .claim(4.MHz(), ccdr.peripheral.ADC, &ccdr.clocks, &pwrcfg)
+        .claim_and_configure(&mut delay);
 
     // Setup ADC
     let mut adc1 = adc::Adc::new(

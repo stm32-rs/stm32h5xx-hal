@@ -46,6 +46,170 @@ impl Instance for ADC1 {}
 #[cfg(feature = "rm0481")]
 impl Instance for ADC2 {}
 
+pub trait AdcCommonExt {
+    fn claim(
+        self,
+        f_adc: Hertz,
+        prec: rec::Adc,
+        clocks: &CoreClocks,
+        pwrcfg: &pwr::PowerConfiguration,
+    ) -> AdcCommon;
+}
+
+impl AdcCommonExt for ADCC {
+    fn claim(
+        self,
+        f_adc: Hertz,
+        prec: rec::Adc,
+        clocks: &CoreClocks,
+        pwrcfg: &pwr::PowerConfiguration,
+    ) -> AdcCommon {
+        // Check adc_ker_ck_input
+        kernel_clk_unwrap(&prec, clocks);
+
+        // Enable AHB clock
+        let prec = prec.enable();
+
+        // Reset peripheral
+        let prec = prec.reset();
+
+        let _f_adc = AdcCommon::configure_clock(
+            &self,
+            f_adc.into(),
+            prec,
+            clocks,
+            pwrcfg,
+        ); // ADC12_COMMON
+        #[cfg(feature = "defmt")]
+        defmt::trace!("Set f_adc to: {}", _f_adc);
+        #[cfg(feature = "log")]
+        log::trace!("Set f_adc to: {}", _f_adc);
+
+        AdcCommon {}
+    }
+}
+
+/// Type for initialized `ADC12_COMMON` or `ADC345_COMMON`
+///
+/// See [`AdcCommon::claim`]
+#[non_exhaustive]
+pub struct AdcCommon {}
+
+impl AdcCommon {
+    /// Sets the clock configuration for this ADC. This is common
+    /// between ADC1 and ADC2, so the prec block is used to ensure
+    /// this method can only be called on one of the ADCs (or both,
+    /// using the [adc12](#method.adc12) method).
+    ///
+    /// Only `CKMODE[1:0]` = 0 is supported
+    fn configure_clock(
+        adcc: &ADCC,
+        f_adc: Hertz,
+        prec: rec::Adc,
+        clocks: &CoreClocks,
+        pwrcfg: &pwr::PowerConfiguration,
+    ) -> Hertz {
+        let ker_ck_input = kernel_clk_unwrap(&prec, clocks);
+
+        let max_adc_ker_ck_analog = 75_000_000;
+        let (max_ker_ck, max_ker_ck_input) = match pwrcfg.vos {
+            VoltageScale::Scale0 => (125_000_000, 250_000_000),
+            VoltageScale::Scale1 => (100_000_000, 200_000_000),
+            VoltageScale::Scale2 => (75_000_000, 150_000_000),
+            VoltageScale::Scale3 => (50_000_000, 100_000_000),
+        };
+        assert!(ker_ck_input.raw() <= max_ker_ck_input,
+                "Kernel clock violates maximum frequency defined in Reference Manual. \
+                    Can result in erroneous ADC readings");
+
+        let f_adc = Self::configure_clock_unchecked(adcc, f_adc, prec, clocks);
+
+        // Maximum ADC clock speed. With BOOST = 0 there is a no
+        // minimum frequency given in part datasheets
+        assert!(f_adc.raw() <= max_ker_ck);
+        assert!(f_adc.raw() <= max_adc_ker_ck_analog);
+
+        f_adc
+    }
+
+    /// No clock checks
+    fn configure_clock_unchecked(
+        adcc: &ADCC,
+        f_adc: Hertz,
+        prec: rec::Adc,
+        clocks: &CoreClocks,
+    ) -> Hertz {
+        let ker_ck = kernel_clk_unwrap(&prec, clocks);
+
+        let f_target = f_adc.raw();
+
+        let (divider, presc) = match ker_ck.raw().div_ceil(f_target) {
+            1 => (1, 0b0000),
+            2 => (2, 0b0001),
+            3..=4 => (4, 0b0010),
+            5..=6 => (6, 0b0011),
+            7..=8 => (8, 0b0100),
+            9..=10 => (10, 0b0101),
+            11..=12 => (12, 0b0110),
+            13..=16 => (16, 0b0111),
+            17..=32 => (32, 0b1000),
+            33..=64 => (64, 0b1001),
+            65..=128 => (128, 0b1010),
+            129..=256 => (256, 0b1011),
+            _ => panic!("Selecting the ADC clock required a prescaler > 256, \
+                            which is not possible in hardware. Either increase the ADC \
+                            clock frequency or decrease the kernel clock frequency"),
+        };
+        adcc.ccr().modify(|_, w| unsafe { w.presc().bits(presc) });
+
+        let f_adc = Hertz::from_raw(ker_ck.raw() / divider);
+        f_adc
+    }
+
+    fn setup_adc<ADC: Instance>(
+        adc: ADC,
+        delay: &mut impl DelayNs,
+    ) -> Adc<ADC, Disabled> {
+        // Consume ADC register block, produce ADC1/2 with default settings
+        let adc = Adc::<ADC, PoweredDown>::default_from_rb(adc);
+
+        // Power Up, Preconfigure and Calibrate
+        let adc = adc.power_up_and_calibrate(delay);
+
+        // From RM0481:
+        // This option bit must be set to 1 when ADCx_INP0 or ADCx_INN1 channel is selected
+        adc.rb.or().modify(|_, w| w.op0().set_bit());
+
+        adc
+    }
+
+    /// Initialise ADC
+    ///
+    /// Sets all configurable parameters to one-shot defaults,
+    /// performs a boot-time calibration.
+    #[cfg(feature = "rm0481")]
+    pub fn claim_and_configure<ADC: Instance>(
+        &self,
+        adc: ADC,
+        delay: &mut impl DelayNs,
+    ) -> Adc<ADC, Disabled> {
+        Self::setup_adc(adc, delay)
+    }
+
+    /// Initialise ADC
+    ///
+    /// Sets all configurable parameters to one-shot defaults,
+    /// performs a boot-time calibration.
+    #[cfg(feature = "rm0492")]
+    pub fn claim_and_configure(
+        self,
+        delay: &mut impl DelayNs,
+    ) -> Adc<ADC1, Disabled> {
+        let adcc = unsafe { ADC1::steal() };
+        Self::setup_adc::<ADC1>(adcc, delay)
+    }
+}
+
 #[cfg(feature = "defmt")]
 use defmt::{assert, panic};
 
@@ -76,7 +240,12 @@ impl NumberOfBits for Resolution {
 /// Enabled ADC (type state)
 pub struct Enabled;
 /// Disabled ADC (type state)
+///
+/// Disabled but powered on
 pub struct Disabled;
+
+/// Powered down ADC (type state)
+pub struct PoweredDown;
 
 pub trait ED {}
 impl ED for Enabled {}
@@ -86,7 +255,6 @@ pub struct Adc<ADC, ED> {
     rb: ADC,
     sample_time: AdcSampleTime,
     resolution: Resolution,
-    clock: Hertz,
     current_channel: Option<u8>,
     _enabled: PhantomData<ED>,
 }
@@ -126,23 +294,6 @@ pub enum AdcSampleTime {
     /// 640.5 cycles sampling time
     #[default]
     T_640_5,
-}
-
-impl AdcSampleTime {
-    /// Returns the number of half clock cycles represented by this sampling time
-    const fn clock_cycles_x2(&self) -> u32 {
-        let x = match self {
-            AdcSampleTime::T_2_5 => 2,
-            AdcSampleTime::T_6_5 => 6,
-            AdcSampleTime::T_12_5 => 12,
-            AdcSampleTime::T_24_5 => 24,
-            AdcSampleTime::T_47_5 => 47,
-            AdcSampleTime::T_92_5 => 92,
-            AdcSampleTime::T_247_5 => 247,
-            AdcSampleTime::T_640_5 => 640,
-        };
-        (2 * x) + 1
-    }
 }
 
 // Refer to RM0433 Rev 7 - Chapter 25.4.13
@@ -248,230 +399,22 @@ fn kernel_clk_unwrap(
     }
 }
 
-#[cfg(feature = "rm0492")]
-pub fn adc1(
-    adc1: ADC1,
-    f_adc: impl Into<Hertz>,
-    delay: &mut impl DelayNs,
-    prec: rec::Adc,
-    clocks: &CoreClocks,
-    pwrcfg: &pwr::PowerConfiguration,
-) -> Adc<ADC1, Disabled> {
-    // Consume ADC register block, produce ADC1/2 with default settings
-    let mut adc1 = Adc::<ADC1, Disabled>::default_from_rb(adc1);
-
-    // Check adc_ker_ck_input
-    kernel_clk_unwrap(&prec, clocks);
-
-    // Enable AHB clock
-    let prec = prec.enable();
-
-    // Power Down
-    adc1.power_down();
-
-    // Reset peripheral
-    let prec = prec.reset();
-
-    // Power Up, Preconfigure and Calibrate
-    adc1.power_up(delay);
-    adc1.configure_clock(f_adc.into(), prec, clocks, pwrcfg); // ADC12_COMMON
-    adc1.preconfigure();
-    adc1.calibrate();
-
-    // From RM0481:
-    // This option bit must be set to 1 when ADCx_INP0 or ADCx_INN1 channel is selected
-    adc1.rb.or().modify(|_, w| w.op0().set_bit());
-
-    adc1
-}
-
-/// Initialise ADC12 together
-///
-/// Sets all configurable parameters to one-shot defaults,
-/// performs a boot-time calibration.
-#[cfg(feature = "rm0481")]
-pub fn adc12(
-    adc1: ADC1,
-    adc2: ADC2,
-    f_adc: impl Into<Hertz>,
-    delay: &mut impl DelayNs,
-    prec: rec::Adc,
-    clocks: &CoreClocks,
-    pwrcfg: &pwr::PowerConfiguration,
-) -> (Adc<ADC1, Disabled>, Adc<ADC2, Disabled>) {
-    // Consume ADC register block, produce ADC1/2 with default settings
-    let mut adc1 = Adc::<ADC1, Disabled>::default_from_rb(adc1);
-    let mut adc2 = Adc::<ADC2, Disabled>::default_from_rb(adc2);
-
-    // Check adc_ker_ck_input
-    kernel_clk_unwrap(&prec, clocks);
-
-    // Enable AHB clock
-    let prec = prec.enable();
-
-    // Power Down
-    adc1.power_down();
-    adc2.power_down();
-
-    // Reset peripheral
-    let prec = prec.reset();
-
-    // Power Up, Preconfigure and Calibrate
-    adc1.power_up(delay);
-    adc2.power_up(delay);
-    let f_adc = adc1.configure_clock(f_adc.into(), prec, clocks, pwrcfg); // ADC12_COMMON
-    adc2.clock = f_adc;
-    adc1.preconfigure();
-    adc2.preconfigure();
-    adc1.calibrate();
-    adc2.calibrate();
-
-    // From RM0481:
-    // This option bit must be set to 1 when ADCx_INP0 or ADCx_INN1 channel is selected
-    adc1.rb.or().modify(|_, w| w.op0().set_bit());
-    adc2.rb.or().modify(|_, w| w.op0().set_bit());
-
-    (adc1, adc2)
-}
-
-impl<ADC: Instance> AdcExt<ADC> for ADC {
-    type Rec = rec::Adc;
-
-    fn adc(
-        self,
-        f_adc: impl Into<Hertz>,
-        delay: &mut impl DelayNs,
-        prec: rec::Adc,
-        clocks: &CoreClocks,
-        pwrcfg: &pwr::PowerConfiguration,
-    ) -> Adc<ADC, Disabled> {
-        Adc::<ADC, Disabled>::new(self, f_adc, delay, prec, clocks, pwrcfg)
-    }
-}
-
-impl<ADC: Instance> Adc<ADC, Disabled> {
-    /// Initialise ADC
-    ///
-    /// Sets all configurable parameters to one-shot defaults,
-    /// performs a boot-time calibration.
-    pub fn new(
-        adc: ADC,
-        f_adc: impl Into<Hertz>,
-        delay: &mut impl DelayNs,
-        prec: rec::Adc,
-        clocks: &CoreClocks,
-        pwrcfg: &pwr::PowerConfiguration,
-    ) -> Self {
-        // Consume ADC register block, produce Self with default
-        // settings
-        let mut adc = Self::default_from_rb(adc);
-
-        // Enable AHB clock
-        let prec = prec.enable();
-
-        // Power Down
-        adc.power_down();
-
-        // Reset peripheral
-        let prec = prec.reset();
-
-        // Power Up, Preconfigure and Calibrate
-        adc.power_up(delay);
-        adc.configure_clock(f_adc.into(), prec, clocks, pwrcfg);
-        adc.preconfigure();
-        adc.calibrate();
-
-        adc
-    }
+impl<ADC: Instance> Adc<ADC, PoweredDown> {
     /// Creates ADC with default settings
     fn default_from_rb(rb: ADC) -> Self {
         Self {
             rb,
             sample_time: AdcSampleTime::default(),
             resolution: Resolution::TwelveBit,
-            clock: Hertz::from_raw(0),
             current_channel: None,
             _enabled: PhantomData,
         }
-    }
-    /// Sets the clock configuration for this ADC. This is common
-    /// between ADC1 and ADC2, so the prec block is used to ensure
-    /// this method can only be called on one of the ADCs (or both,
-    /// using the [adc12](#method.adc12) method).
-    ///
-    /// Only `CKMODE[1:0]` = 0 is supported
-    fn configure_clock(
-        &mut self,
-        f_adc: Hertz,
-        prec: rec::Adc,
-        clocks: &CoreClocks,
-        pwrcfg: &pwr::PowerConfiguration,
-    ) -> Hertz {
-        let ker_ck_input = kernel_clk_unwrap(&prec, clocks);
-
-        let max_adc_ker_ck_analog = 75_000_000;
-        let (max_ker_ck, max_ker_ck_input) = match pwrcfg.vos {
-            VoltageScale::Scale0 => (125_000_000, 250_000_000),
-            VoltageScale::Scale1 => (100_000_000, 200_000_000),
-            VoltageScale::Scale2 => (75_000_000, 150_000_000),
-            VoltageScale::Scale3 => (50_000_000, 100_000_000),
-        };
-        assert!(ker_ck_input.raw() <= max_ker_ck_input,
-                "Kernel clock violates maximum frequency defined in Reference Manual. \
-                    Can result in erroneous ADC readings");
-
-        let f_adc = self.configure_clock_unchecked(f_adc, prec, clocks);
-
-        // Maximum ADC clock speed. With BOOST = 0 there is a no
-        // minimum frequency given in part datasheets
-        assert!(f_adc.raw() <= max_ker_ck);
-        assert!(f_adc.raw() <= max_adc_ker_ck_analog);
-
-        f_adc
-    }
-
-    /// No clock checks
-    fn configure_clock_unchecked(
-        &mut self,
-        f_adc: Hertz,
-        prec: rec::Adc,
-        clocks: &CoreClocks,
-    ) -> Hertz {
-        let ker_ck = kernel_clk_unwrap(&prec, clocks);
-
-        let f_target = f_adc.raw();
-
-        let (divider, presc) = match ker_ck.raw().div_ceil(f_target) {
-            1 => (1, 0b0000),
-            2 => (2, 0b0001),
-            3..=4 => (4, 0b0010),
-            5..=6 => (6, 0b0011),
-            7..=8 => (8, 0b0100),
-            9..=10 => (10, 0b0101),
-            11..=12 => (12, 0b0110),
-            13..=16 => (16, 0b0111),
-            17..=32 => (32, 0b1000),
-            33..=64 => (64, 0b1001),
-            65..=128 => (128, 0b1010),
-            129..=256 => (256, 0b1011),
-            _ => panic!("Selecting the ADC clock required a prescaler > 256, \
-                            which is not possible in hardware. Either increase the ADC \
-                            clock frequency or decrease the kernel clock frequency"),
-        };
-        unsafe { ADCC::steal() }
-            .ccr()
-            .modify(|_, w| unsafe { w.presc().bits(presc) });
-
-        let f_adc = Hertz::from_raw(ker_ck.raw() / divider);
-
-        self.clock = f_adc;
-        f_adc
     }
 
     /// Disables Deeppowerdown-mode and enables voltage regulator
     ///
     /// Note: After power-up, a [`calibration`](#method.calibrate) shall be run
-    pub fn power_up(&mut self, delay: &mut impl DelayNs) {
+    fn power_up(&mut self, delay: &mut impl DelayNs) {
         // Refer to RM0433 Rev 7 - Chapter 25.4.6
         self.rb
             .cr()
@@ -479,20 +422,47 @@ impl<ADC: Instance> Adc<ADC, Disabled> {
         delay.delay_us(10);
     }
 
+    pub fn power_up_and_calibrate(
+        mut self,
+        delay: &mut impl DelayNs,
+    ) -> Adc<ADC, Disabled> {
+        self.power_up(delay);
+
+        let mut adc = Adc {
+            rb: self.rb,
+            sample_time: self.sample_time,
+            resolution: self.resolution,
+            current_channel: self.current_channel,
+            _enabled: PhantomData,
+        };
+        adc.calibrate();
+        adc
+    }
+}
+
+impl<ADC: Instance> Adc<ADC, Disabled> {
     /// Enables Deeppowerdown-mode and disables voltage regulator
     ///
     /// Note: This resets the [`calibration`](#method.calibrate) of the ADC
-    pub fn power_down(&mut self) {
+    pub fn power_down(self) -> Adc<ADC, PoweredDown> {
         // Refer to RM0433 Rev 7 - Chapter 25.4.6
         self.rb
             .cr()
             .modify(|_, w| w.deeppwd().set_bit().advregen().clear_bit());
+
+        Adc {
+            rb: self.rb,
+            sample_time: self.sample_time,
+            resolution: self.resolution,
+            current_channel: self.current_channel,
+            _enabled: PhantomData,
+        }
     }
 
     /// Calibrates the ADC in single channel mode
     ///
     /// Note: The ADC must be disabled
-    pub fn calibrate(&mut self) {
+    fn calibrate(&mut self) {
         // Refer to RM0433 Rev 7 - Chapter 25.4.8
         self.check_calibration_conditions();
 
@@ -524,18 +494,6 @@ impl<ADC: Instance> Adc<ADC, Disabled> {
         }
     }
 
-    /// Configuration process prior to enabling the ADC
-    ///
-    /// Note: the ADC must be disabled
-    fn preconfigure(&mut self) {
-        self.configure_channels_dif_mode();
-    }
-
-    /// Sets channels to single ended mode
-    fn configure_channels_dif_mode(&mut self) {
-        self.rb.difsel().reset();
-    }
-
     /// Configuration process immediately after enabling the ADC
     fn configure(&mut self) {
         // Single conversion mode, Software trigger
@@ -561,7 +519,6 @@ impl<ADC: Instance> Adc<ADC, Disabled> {
             rb: self.rb,
             sample_time: self.sample_time,
             resolution: self.resolution,
-            clock: self.clock,
             current_channel: None,
             _enabled: PhantomData,
         }
@@ -697,7 +654,6 @@ impl<ADC: Instance> Adc<ADC, Enabled> {
             rb: self.rb,
             sample_time: self.sample_time,
             resolution: self.resolution,
-            clock: self.clock,
             current_channel: None,
             _enabled: PhantomData,
         }
@@ -722,37 +678,6 @@ impl<ADC: Instance, ED> Adc<ADC, ED> {
         self.set_sample_time(AdcSampleTime::default());
         self.set_resolution(Resolution::TwelveBit);
         cfg
-    }
-
-    /// The current ADC clock frequency. Defined as f_ADC in device datasheets
-    ///
-    /// The value returned by this method will always be equal or
-    /// lower than the `f_adc` passed to [`init`](#method.init)
-    pub fn clock_frequency(&self) -> Hertz {
-        self.clock
-    }
-
-    /// The current ADC sampling frequency. This is the reciprocal of Tconv
-    pub const fn sampling_frequency(&self) -> Hertz {
-        let sample_cycles_x2 = self.sample_time.clock_cycles_x2();
-
-        // TODO: Exception for RM0468 ADC3
-        // let sar_cycles_x2 = match self.resolution {
-        //     Resolution::SixBit => 13, // 6.5
-        //     Resolution::EightBit => 17, // 8.5
-        //     Resolution::TenBit => 21,   // 10.5
-        //     _ => 25,                    // 12.5
-        // };
-
-        let sar_cycles = match self.resolution {
-            Resolution::SixBit => 6,
-            Resolution::EightBit => 8,
-            Resolution::TenBit => 10,
-            Resolution::TwelveBit => 12,
-        };
-
-        let cycles = sample_cycles_x2.div_ceil(2) + sar_cycles;
-        Hertz::Hz(self.clock.to_Hz() / cycles)
     }
 
     /// Get ADC samping time
