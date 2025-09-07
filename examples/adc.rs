@@ -7,9 +7,8 @@
 
 use cortex_m_rt::entry;
 
-use embedded_hal_02::adc::OneShot;
 use stm32h5xx_hal::{
-    adc::{self, AdcCommonExt},
+    adc::{self, AdcCommonExt, AdcSampleTime},
     delay::Delay,
     pac,
     prelude::*,
@@ -56,33 +55,27 @@ fn main() -> ! {
     let mut delay = Delay::new(cp.SYST, &ccdr.clocks);
 
     #[cfg(feature = "rm0481")]
-    let adc = dp
-        .ADCC
-        .claim(4.MHz(), ccdr.peripheral.ADC, &ccdr.clocks, &pwrcfg)
-        .claim_and_configure(dp.ADC1, &mut delay);
+    let mut adcc =
+        dp.ADCC
+            .claim(4.MHz(), ccdr.peripheral.ADC, &ccdr.clocks, &pwrcfg);
 
     #[cfg(feature = "rm0492")]
-    let adc = dp
-        .ADC1
-        .claim(4.MHz(), ccdr.peripheral.ADC, &ccdr.clocks, &pwrcfg)
-        .claim_and_configure(&mut delay);
-
-    // Setup ADC
-    let mut adc1 = adc::Adc::new(
-        dp.ADC1,
-        4.MHz(),
-        &mut delay,
-        ccdr.peripheral.ADC,
-        &ccdr.clocks,
-        &pwrcfg,
-    );
+    let mut adcc =
+        dp.ADC1
+            .claim(4.MHz(), ccdr.peripheral.ADC, &ccdr.clocks, &pwrcfg);
 
     let mut temp = adc::Temperature::new();
-    temp.enable(&mut adc1);
-    let mut adc1: adc::Adc<
-        stm32h5::Periph<pac::adc1::RegisterBlock, 1107460096>,
-        adc::Enabled,
-    > = adc1.enable();
+    temp.enable(&mut adcc);
+
+    #[cfg(feature = "rm0481")]
+    let mut adc = adcc
+        .claim_and_configure(dp.ADC1, &mut delay, adc::Resolution::TwelveBit)
+        .enable();
+
+    #[cfg(feature = "rm0492")]
+    let mut adc = adcc
+        .claim_and_configure(&mut delay, adc::Resolution::TwelveBit)
+        .enable();
 
     // We can't use ADC2 here because ccdr.peripheral.ADC12 has been
     // consumed. See examples/adc12.rs
@@ -91,16 +84,16 @@ fn main() -> ! {
     let gpioc = dp.GPIOC.split(ccdr.peripheral.GPIOC);
 
     // Configure pc0 as an analog input
-    let mut channel = gpioc.pc0.into_analog(); // ANALOG IN 10
+    let pin = gpioc.pc0.into_analog();
 
     loop {
-        let data = adc1.read(&mut channel).unwrap();
+        let data = adc.convert(&pin, AdcSampleTime::default());
         // voltage = reading * (vref/resolution)
         info!(
             "ADC reading: {}, voltage for nucleo: {}V. Temp reading: {}",
             data,
-            data as f32 * (3.3 / adc1.slope() as f32),
-            adc1.read(&mut temp).unwrap()
+            data as f32 * (3.3 / adc.slope() as f32),
+            adc.convert(&temp, AdcSampleTime::default())
         );
     }
 }

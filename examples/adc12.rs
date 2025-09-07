@@ -9,9 +9,12 @@
 
 use cortex_m_rt::entry;
 
-use embedded_hal_02::adc::OneShot;
 use stm32h5xx_hal::{
-    adc, delay::Delay, pac, prelude::*, rcc::rec::AdcDacClkSel,
+    adc::{self, AdcCommonExt, AdcSampleTime},
+    delay::Delay,
+    pac,
+    prelude::*,
+    rcc::rec::AdcDacClkSel,
 };
 use utilities::logger::info;
 
@@ -53,16 +56,21 @@ fn main() -> ! {
 
     let mut delay = Delay::new(cp.SYST, &ccdr.clocks);
 
-    // Setup ADC
-    // Setup ADC1 and ADC2
-    let (adc1, adc2) = adc::adc12(
+    // Setup adc common
+    let adcc =
+        dp.ADCC
+            .claim(4.MHz(), ccdr.peripheral.ADC, &ccdr.clocks, &pwrcfg);
+
+    // Set up individual adc's
+    let adc1 = adcc.claim_and_configure(
         dp.ADC1,
-        dp.ADC2,
-        4.MHz(),
         &mut delay,
-        ccdr.peripheral.ADC,
-        &ccdr.clocks,
-        &pwrcfg,
+        adc::Resolution::TwelveBit,
+    );
+    let adc2 = adcc.claim_and_configure(
+        dp.ADC2,
+        &mut delay,
+        adc::Resolution::TwelveBit,
     );
 
     let mut adc1 = adc1.enable();
@@ -71,12 +79,12 @@ fn main() -> ! {
     // Setup GPIOC
     // NOTE: PC2 and PC3 are only pinned out on TFBGA packages!!
     let gpioc = dp.GPIOC.split(ccdr.peripheral.GPIOC);
-    let mut channel_pc2 = gpioc.pc2.into_analog(); // AIN 12
-    let mut channel_pc3 = gpioc.pc3.into_analog(); // AIN 13
+    let pc2 = gpioc.pc2.into_analog(); // AIN 12
+    let pc3 = gpioc.pc3.into_analog(); // AIN 13
 
     loop {
-        let data_pc2 = adc1.read(&mut channel_pc2).unwrap();
-        let data_pc3 = adc2.read(&mut channel_pc3).unwrap();
+        let data_pc2 = adc1.convert(&pc2, AdcSampleTime::default());
+        let data_pc3 = adc2.convert(&pc3, AdcSampleTime::default());
         // voltage = reading * (vref/resolution)
         info!("ADC readings: {} {}", data_pc2, data_pc3);
     }

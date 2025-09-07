@@ -1,4 +1,4 @@
-use super::{Adc, Disabled, Temperature, Vbat, Vddcore, Vrefint};
+use super::{AdcCommon, Temperature, Vbat, Vddcore, Vrefint};
 use crate::gpio::{self, Analog};
 
 #[cfg(feature = "rm0492")]
@@ -10,12 +10,17 @@ use crate::stm32::{ADC1, ADC2, ADCC};
 macro_rules! adc_pins {
     ($ADC:ident, $($input:ty => $chan:expr),+ $(,)*) => {
         $(
+            #[cfg(feature = "eh-02")]
             impl embedded_hal_02::adc::Channel<$ADC> for $input {
                 type ID = u8;
 
                 fn channel() -> u8 {
                     $chan
                 }
+            }
+
+            impl super::AdcChannel<$ADC> for $input {
+                const CH: u8 = $chan;
             }
         )+
     };
@@ -31,7 +36,7 @@ macro_rules! adc_internal {
 
                 /// Enables the internal voltage/sensor
                 /// ADC must be disabled.
-                pub fn enable(&mut self, _adc: &mut Adc<$INT_ADC, Disabled>) {
+                pub fn enable(&mut self, _adc: &mut AdcCommon) {
                     // TODO: This is not safe since we do not hold both adcs
                     let common = unsafe { ADCC::steal() };
 
@@ -39,7 +44,7 @@ macro_rules! adc_internal {
                 }
                 /// Disables the internal voltage/sdissor
                 /// ADC must be disabled.
-                pub fn disable(&mut self, _adc: &mut Adc<$INT_ADC, Disabled>) {
+                pub fn disable(&mut self, _adc: &mut AdcCommon) {
                     // TODO: This is not safe since we do not hold both adcs
                     let common = unsafe { ADCC::steal() };
 
@@ -54,13 +59,13 @@ macro_rules! adc_internal {
 
 #[cfg(feature = "rm0492")]
 impl Vddcore {
-    pub fn enable(_adc: &mut Adc<ADC1, Disabled>) {
+    pub fn enable(_adc: &mut AdcCommon) {
         let adc = unsafe { ADC1::steal() };
 
         adc.or().modify(|_, w| w.op1().set_bit());
     }
 
-    pub fn disable(_adc: &mut Adc<ADC1, Disabled>) {
+    pub fn disable(_adc: &mut AdcCommon) {
         let adc = unsafe { ADC1::steal() };
 
         adc.or().modify(|_, w| w.op1().clear_bit());
@@ -71,14 +76,14 @@ adc_pins!(ADC1, Vddcore => 16);
 
 #[cfg(feature = "rm0481")]
 impl Vddcore {
-    pub fn enable(_adc: &mut Adc<ADC2, Disabled>) {
-        let adc2 = unsafe { ADC1::steal() };
+    pub fn enable(_adc: &mut super::Adc<ADC2, super::Disabled>) {
+        let adc2 = unsafe { ADC2::steal() };
 
         adc2.or().modify(|_, w| w.op0().bit(true));
     }
 
-    pub fn disable(_adc: &mut Adc<ADC2, Disabled>) {
-        let adc2 = unsafe { ADC1::steal() };
+    pub fn disable(_adc: &mut super::Adc<ADC2, super::Disabled>) {
+        let adc2 = unsafe { ADC2::steal() };
 
         adc2.or().modify(|_, w| w.op0().bit(false));
     }

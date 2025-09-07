@@ -11,6 +11,7 @@
 //! Originally from https://github.com/stm32-rs/stm32h7xx-hal
 mod h5;
 
+#[cfg(feature = "eh-02")]
 use core::convert::Infallible;
 use core::marker::PhantomData;
 use core::ops::Deref;
@@ -73,13 +74,8 @@ impl AdcCommonExt for ADCC {
         // Reset peripheral
         let prec = prec.reset();
 
-        let _f_adc = AdcCommon::configure_clock(
-            &self,
-            f_adc.into(),
-            prec,
-            clocks,
-            pwrcfg,
-        ); // ADC12_COMMON
+        let _f_adc =
+            AdcCommon::configure_clock(&self, f_adc, prec, clocks, pwrcfg); // ADC12_COMMON
         #[cfg(feature = "defmt")]
         defmt::trace!("Set f_adc to: {}", _f_adc);
         #[cfg(feature = "log")]
@@ -162,24 +158,30 @@ impl AdcCommon {
         };
         adcc.ccr().modify(|_, w| unsafe { w.presc().bits(presc) });
 
-        let f_adc = Hertz::from_raw(ker_ck.raw() / divider);
-        f_adc
+        Hertz::from_raw(ker_ck.raw() / divider)
     }
 
     fn setup_adc<ADC: Instance>(
         adc: ADC,
         delay: &mut impl DelayNs,
+        resolution: Resolution,
     ) -> Adc<ADC, Disabled> {
         // Consume ADC register block, produce ADC1/2 with default settings
         let adc = Adc::<ADC, PoweredDown>::default_from_rb(adc);
 
         // Power Up, Preconfigure and Calibrate
-        let adc = adc.power_up_and_calibrate(delay);
+        let mut adc = adc.power_up_and_calibrate(delay);
 
         // From RM0481:
         // This option bit must be set to 1 when ADCx_INP0 or ADCx_INN1 channel is selected
         adc.rb.or().modify(|_, w| w.op0().set_bit());
 
+        // Set resolution
+        adc.rb
+            .cfgr()
+            .modify(|_, w| unsafe { w.res().bits(resolution as _) });
+
+        adc.set_resolution(resolution);
         adc
     }
 
@@ -192,8 +194,9 @@ impl AdcCommon {
         &self,
         adc: ADC,
         delay: &mut impl DelayNs,
+        resolution: Resolution,
     ) -> Adc<ADC, Disabled> {
-        Self::setup_adc(adc, delay)
+        Self::setup_adc(adc, delay, resolution)
     }
 
     /// Initialise ADC
@@ -204,9 +207,10 @@ impl AdcCommon {
     pub fn claim_and_configure(
         self,
         delay: &mut impl DelayNs,
+        resolution: Resolution,
     ) -> Adc<ADC1, Disabled> {
         let adcc = unsafe { ADC1::steal() };
-        Self::setup_adc::<ADC1>(adcc, delay)
+        Self::setup_adc::<ADC1>(adcc, delay, resolution)
     }
 }
 
@@ -296,6 +300,90 @@ pub enum AdcSampleTime {
     T_640_5,
 }
 
+/// The place in the sequence a given channel should be captured
+#[derive(Debug, PartialEq, PartialOrd, Copy, Clone)]
+pub enum Sequence {
+    /// 1
+    One,
+    /// 2
+    Two,
+    /// 3
+    Three,
+    /// 4
+    Four,
+    /// 5
+    Five,
+    /// 6
+    Six,
+    /// 7
+    Seven,
+    /// 8
+    Eight,
+    /// 9
+    Nine,
+    /// 10
+    Ten,
+    /// 11
+    Eleven,
+    /// 12
+    Twelve,
+    /// 13
+    Thirteen,
+    /// 14
+    Fourteen,
+    /// 15
+    Fifteen,
+    /// 16
+    Sixteen,
+}
+
+impl From<Sequence> for u8 {
+    fn from(s: Sequence) -> u8 {
+        match s {
+            Sequence::One => 0,
+            Sequence::Two => 1,
+            Sequence::Three => 2,
+            Sequence::Four => 3,
+            Sequence::Five => 4,
+            Sequence::Six => 5,
+            Sequence::Seven => 6,
+            Sequence::Eight => 7,
+            Sequence::Nine => 8,
+            Sequence::Ten => 9,
+            Sequence::Eleven => 10,
+            Sequence::Twelve => 11,
+            Sequence::Thirteen => 12,
+            Sequence::Fourteen => 13,
+            Sequence::Fifteen => 14,
+            Sequence::Sixteen => 15,
+        }
+    }
+}
+
+impl From<u8> for Sequence {
+    fn from(bits: u8) -> Self {
+        match bits {
+            0 => Sequence::One,
+            1 => Sequence::Two,
+            2 => Sequence::Three,
+            3 => Sequence::Four,
+            4 => Sequence::Five,
+            5 => Sequence::Six,
+            6 => Sequence::Seven,
+            7 => Sequence::Eight,
+            8 => Sequence::Nine,
+            9 => Sequence::Ten,
+            10 => Sequence::Eleven,
+            11 => Sequence::Twelve,
+            12 => Sequence::Thirteen,
+            13 => Sequence::Fourteen,
+            14 => Sequence::Fifteen,
+            15 => Sequence::Sixteen,
+            _ => unimplemented!(),
+        }
+    }
+}
+
 // Refer to RM0433 Rev 7 - Chapter 25.4.13
 impl From<AdcSampleTime> for u8 {
     fn from(val: AdcSampleTime) -> u8 {
@@ -345,19 +433,6 @@ pub struct Temperature;
 #[derive(Default)]
 pub struct Vddcore;
 
-pub trait AdcExt<ADC>: Sized {
-    type Rec: ResetEnable;
-
-    fn adc(
-        self,
-        f_adc: impl Into<Hertz>,
-        delay: &mut impl DelayNs,
-        prec: Self::Rec,
-        clocks: &CoreClocks,
-        pwrcfg: &pwr::PowerConfiguration,
-    ) -> Adc<ADC, Disabled>;
-}
-
 /// Stored ADC config can be restored using the `Adc::restore_cfg` method
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct StoredConfig(AdcSampleTime, Resolution);
@@ -368,6 +443,10 @@ impl defmt::Format for StoredConfig {
         let StoredConfig(sample_time, res) = &self;
         defmt::write!(fmt, "StoredConfig({:?}, {:?})", sample_time, res)
     }
+}
+
+pub trait AdcChannel<ADC: Instance> {
+    const CH: u8;
 }
 
 /// Returns the frequency of the current adc_ker_ck
@@ -536,55 +615,85 @@ impl<ADC: Instance> Adc<ADC, Enabled> {
         while self.rb.cr().read().jadstp().bit_is_set() {}
     }
 
-    fn set_chan_smp(&mut self, chan: u8) {
-        let t = self.get_sample_time().into();
-        if chan <= 9 {
-            self.rb.smpr1().modify(|_, w| w.smp(chan).set(t));
-        } else {
-            self.rb.smpr2().modify(|_, w| w.smp(chan - 10).set(t));
+    pub fn configure_ch(
+        &mut self,
+        ch: u8,
+        sequence: Sequence,
+        sample_time: AdcSampleTime,
+    ) {
+        //Check the sequence is long enough
+        self.rb.sqr1().modify(|r, w| unsafe {
+            let prev: Sequence = r.l().bits().into();
+            if prev < sequence {
+                w.l().bits(sequence.into())
+            } else {
+                w
+            }
+        });
+        let reg_i = u8::from(sequence) / 4;
+        let i = u8::from(sequence) % 4;
+
+        //Set the channel in the right sequence field
+        match reg_i {
+            0 => self.rb.sqr1().modify(|_, w| unsafe { w.sq(i).bits(ch) }),
+            1 => self.rb.sqr2().modify(|_, w| unsafe { w.sq(i).bits(ch) }),
+            2 => self.rb.sqr3().modify(|_, w| unsafe { w.sq(i).bits(ch) }),
+            3 => self.rb.sqr4().modify(|_, w| unsafe { w.sq(i).bits(ch) }),
+            _ => unreachable!(),
+        };
+
+        //Set the sample time for the channel
+        let st = u8::from(sample_time);
+        unsafe {
+            match ch {
+                0..=9 => self.rb.smpr1().modify(|_, w| w.smp(ch).bits(st)),
+                10.. => self.rb.smpr2().modify(|_, w| w.smp(ch - 10).bits(st)),
+            };
         }
     }
 
-    // This method starts a conversion sequence on the given channel
-    fn start_conversion_common(&mut self, chan: u8) {
-        self.check_conversion_conditions();
-
-        // Select channel (with preselection, refer to RM0433 Rev 7 - Chapter 25.4.12)
-        self.rb.sqr1().modify(|_, w| unsafe { w.sq1().bits(chan) });
-        self.set_chan_smp(chan);
-        self.rb
-            .sqr1()
-            .modify(|_, w| unsafe { w.sq1().bits(chan).l().bits(0) });
-        self.current_channel = Some(chan);
-
-        // Perform conversion
-        self.rb.cr().modify(|_, w| w.adstart().set_bit());
+    /// Configure a channel for sampling.
+    /// It will make sure the sequence is at least as long as the `sequence` provided.
+    /// # Arguments
+    /// * `channel` - channel to configure
+    /// * `sequence` - where in the sequence to sample the channel. Also called rank in some STM docs/code
+    /// * `sample_time` - how long to sample for. See datasheet and ref manual to work out how long you need\
+    ///   to sample for at a given ADC clock frequency
+    pub fn configure_channel<CHANNEL>(
+        &mut self,
+        _channel: &CHANNEL,
+        sequence: Sequence,
+        sample_time: AdcSampleTime,
+    ) where
+        CHANNEL: AdcChannel<ADC>,
+    {
+        self.configure_ch(CHANNEL::CH, sequence, sample_time);
     }
 
     /// Start conversion
     ///
-    /// This method starts a conversion sequence on the given pin.
-    /// The value can be then read through the `read_sample` method.
-    // Refer to RM0433 Rev 7 - Chapter 25.4.16
-    pub fn start_conversion<PIN>(&mut self, _pin: &mut PIN)
-    where
-        PIN: embedded_hal_02::adc::Channel<ADC, ID = u8>,
-    {
-        let chan = PIN::channel();
-        assert!(chan <= 19);
+    /// This method starts a conversion sequence
+    #[inline(always)]
+    fn start_conversion(&mut self) {
+        //Start conversion
+        self.rb.cr().modify(|_, w| w.adstart().set_bit());
+    }
 
-        // TODO: Move to ADC init?
-        // Set resolution
-        self.rb
-            .cfgr()
-            .modify(|_, w| unsafe { w.res().bits(self.get_resolution() as _) });
+    /// Block until the conversion is completed and return to configured
+    pub fn wait_for_conversion_sequence(&mut self) {
+        while !self.rb.isr().read().eoc().bit_is_set() {}
+    }
 
-        // TODO: Move to ADC init?
-        self.rb
-            .cfgr()
-            .modify(|_, w| w.cont().single().discen().disabled());
-
-        self.start_conversion_common(chan);
+    pub fn convert<PIN: AdcChannel<ADC>>(
+        &mut self,
+        pin: &PIN,
+        sample_time: AdcSampleTime,
+    ) -> u16 {
+        self.configure_channel(pin, Sequence::One, sample_time);
+        self.start_conversion();
+        //Wait for the sequence to complete
+        self.wait_for_conversion_sequence();
+        self.current_sample()
     }
 
     /// Read sample
@@ -592,6 +701,7 @@ impl<ADC: Instance> Adc<ADC, Enabled> {
     /// `nb::Error::WouldBlock` in case the conversion is still
     /// progressing.
     // Refer to RM0433 Rev 7 - Chapter 25.4.16
+    #[cfg(feature = "eh-02")]
     pub fn read_sample(&mut self) -> nb::Result<u16, Infallible> {
         self.current_channel
             .expect("No channel was selected, use start_conversion first");
@@ -616,24 +726,6 @@ impl<ADC: Instance> Adc<ADC, Enabled> {
     /// NOTE: Depending on OVRMOD the data register acts like a FIFO queue with three stages
     pub fn current_sample(&mut self) -> u16 {
         self.rb.dr().read().rdata().bits()
-    }
-
-    fn check_conversion_conditions(&self) {
-        let cr = self.rb.cr().read();
-        // Ensure that no conversions are ongoing
-        if cr.adstart().bit_is_set() {
-            panic!("Cannot start conversion because a regular conversion is ongoing");
-        }
-        if cr.jadstart().bit_is_set() {
-            panic!("Cannot start conversion because an injected conversion is ongoing");
-        }
-        // Ensure that the ADC is enabled
-        if cr.aden().bit_is_clear() {
-            panic!("Cannot start conversion because ADC is currently disabled");
-        }
-        if cr.addis().bit_is_set() {
-            panic!("Cannot start conversion because there is a pending request to disable the ADC");
-        }
     }
 
     /// Disable ADC
@@ -742,6 +834,7 @@ impl<ADC: Instance, ED> Adc<ADC, ED> {
     }
 }
 
+#[cfg(feature = "eh-02")]
 impl<ADC: Instance, PIN> embedded_hal_02::adc::OneShot<ADC, u16, PIN>
     for Adc<ADC, Enabled>
 where
@@ -750,9 +843,11 @@ where
     type Error = Infallible;
 
     // TODO: We are not really non-blocking
-    fn read(&mut self, pin: &mut PIN) -> nb::Result<u16, Infallible> {
-        self.start_conversion(pin);
-        let res = nb::block!(self.read_sample()).unwrap();
-        Ok(res)
+    fn read(&mut self, _pin: &mut PIN) -> nb::Result<u16, Infallible> {
+        self.configure_ch(PIN::channel(), Sequence::One, self.sample_time);
+        self.start_conversion();
+        //Wait for the sequence to complete
+        self.wait_for_conversion_sequence();
+        Ok(self.current_sample())
     }
 }

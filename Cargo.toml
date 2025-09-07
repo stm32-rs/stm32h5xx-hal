@@ -67,7 +67,7 @@ defmt = [
     "stm32h5/defmt",
 ]
 
-adc = ["dep:embedded-hal-02", "dep:nb"]
+eh-02 = ["dep:embedded-hal-02", "dep:nb"]
 
 [dependencies]
 cortex-m = { version = "^0.7.7", features = ["critical-section-single-core"] }
@@ -123,10 +123,6 @@ name = "i2c_target_manual_ack"
 required-features = ["stm32h503"]
 
 [[example]]
-name = "adc"
-required-features = ["adc"]
-
-[[example]]
 name = "adc12"
-required-features = ["adc", "rm0481"]
+required-features = ["rm0481"]
 
