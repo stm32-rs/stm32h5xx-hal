@@ -28,7 +28,7 @@ fn main() -> ! {
     let ccdr = rcc
         .sys_ck(192.MHz())
         .pll1_q_ck(64.MHz())
-        .freeze(pwrcfg, &dp.SBS);
+        .freeze(&pwrcfg, &dp.SBS);
 
     // Acquire the GPIOB peripheral. This also enables the clock for
     // GPIOB in the RCC register.

@@ -558,7 +558,7 @@ impl Rcc {
     /// function may also panic if a clock specification can be
     /// achieved, but the mechanism for doing so is not yet
     /// implemented here.
-    pub fn freeze(mut self, pwrcfg: PowerConfiguration, sbs: &SBS) -> Ccdr {
+    pub fn freeze(mut self, pwrcfg: &PowerConfiguration, sbs: &SBS) -> Ccdr {
         // We do not reset RCC here. This routine must assert when
         // the previous state of the RCC peripheral is unacceptable.
 
