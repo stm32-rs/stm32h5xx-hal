@@ -124,11 +124,6 @@ macro_rules! adc_pins_common {
     )*};
 }
 
-#[cfg(any(
-    feature = "stm32h503",
-    feature = "stm32h523",
-    feature = "stm32h533"
-))]
 adc_pins_common!(
     gpio::PC0<Analog> => 10,
     gpio::PC1<Analog> => 11,
@@ -150,15 +145,14 @@ adc_pins_common!(
     gpio::PB1<Analog> => 5,
 );
 
-#[cfg(feature = "stm32h523")]
+#[cfg(feature = "rm0481")]
 adc_pins!(
     ADC1,
     gpio::PF11<Analog> => 2,
     gpio::PF12<Analog> => 6,
-
 );
 
-#[cfg(feature = "stm32h523")]
+#[cfg(feature = "rm0481")]
 adc_pins!(
     ADC2,
     gpio::PF13<Analog> => 2,
