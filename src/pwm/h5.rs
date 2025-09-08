@@ -156,117 +156,164 @@ macro_rules! pins {
 }
 
 pins!(
-    pac::TIM1: //523,533,563,573
+    pac::TIM1: //523,533,563,573,503
         CH1(ComplementaryImpossible): [
-            gpio::PA8<Alternate<1>>, //523,533,563,573
+            gpio::PA8<Alternate<1>>, //523,533,563,573,503
             gpio::PE9<Alternate<1>>, //523,533,563,573
             gpio::PH11<Alternate<1>>, //563,573
+            gpio::PA13<Alternate<1>>, //503
+            gpio::PB1<Alternate<14>>, //503
+            gpio::PB7<Alternate<14>>, //503
+            gpio::PC6<Alternate<1>>, //503
         ]
         CH2(ComplementaryImpossible): [
-            gpio::PA9<Alternate<1>>, //523,533,563,573
+            gpio::PA9<Alternate<1>>, //523,533,563,573,503
             gpio::PE11<Alternate<1>>, //523,533,563,573
             gpio::PH9<Alternate<1>>, //563,573
+            gpio::PA14<Alternate<1>>, //503
+            gpio::PC7<Alternate<1>>, //503
+            gpio::PB4<Alternate<14>>, //503
+            gpio::PB6<Alternate<14>>, //503
         ]
         CH3(ComplementaryImpossible): [
-            gpio::PA10<Alternate<1>>, //523,533,563,573
+            gpio::PA10<Alternate<1>>, //523,533,563,573,503
             gpio::PE13<Alternate<1>>, //523,533,563,573
             gpio::PH7<Alternate<1>>, //563,573
+            gpio::PB5<Alternate<1>>, //503
+            gpio::PC8<Alternate<1>>, //503
+            gpio::PA1<Alternate<14>>, //503
         ]
         CH4(ComplementaryImpossible): [
-            gpio::PA11<Alternate<1>>, //523,533,563,573
+            gpio::PA11<Alternate<1>>, //523,533,563,573,503
             gpio::PE14<Alternate<1>>, //523,533,563,573
+            gpio::PC9<Alternate<1>>, //503
+            gpio::PA2<Alternate<14>>, //503
+            gpio::PC12<Alternate<14>>, //503
         ]
         CH1N: [
-            gpio::PA7<Alternate<1>>, //523,533,563,573
-            gpio::PB13<Alternate<1>>, //523,533,563,573
+            gpio::PA7<Alternate<1>>, //523,533,563,573,503
+            gpio::PB13<Alternate<1>>, //523,533,563,573,503
             gpio::PE8<Alternate<1>>, //523,533,563,573
             gpio::PH10<Alternate<1>>, //563,573
+            gpio::PA3<Alternate<14>>, //503
         ]
         CH2N: [
-            gpio::PB0<Alternate<1>>, //523,533,563,573
-            gpio::PB14<Alternate<1>>, //523,533,563,573
+            gpio::PB0<Alternate<1>>, //523,533,563,573,503
+            gpio::PB14<Alternate<1>>, //523,533,563,573,503
             gpio::PE10<Alternate<1>>, //523,533,563,573
             gpio::PH8<Alternate<1>>, //563,573
+            gpio::PA4<Alternate<1>>, //503
+            gpio::PB2<Alternate<1>>, //503
+            gpio::PB7<Alternate<1>>, //503
         ]
         CH3N: [
-            gpio::PB1<Alternate<1>>, //523,533,563,573
-            gpio::PB15<Alternate<1>>, //523,533,563,573
+            gpio::PB1<Alternate<1>>, //523,533,563,573,503
+            gpio::PB15<Alternate<1>>, //523,533,563,573,503
             gpio::PE12<Alternate<1>>, //523,533,563,573
             gpio::PH6<Alternate<1>>, //563,573
+            gpio::PB6<Alternate<1>>, //503
         ]
         CH4N: [
-            gpio::PC5<Alternate<1>>, //523,533,563,573
+            gpio::PC5<Alternate<1>>, //523,533,563,573,503
             gpio::PD5<Alternate<1>>, //523,533,563,573
             gpio::PE15<Alternate<3>>, //523,533,563,573
+            gpio::PB4<Alternate<1>>, //503
+            gpio::PA8<Alternate<14>>, //503
+            gpio::PA14<Alternate<14>>, //503
         ]
         BRK: [
-            gpio::PA6<Alternate<1>>, //523,533,563,573
-            gpio::PB12<Alternate<1>>, //523,533,563,573
+            gpio::PA6<Alternate<1>>, //523,533,563,573,503
+            gpio::PB12<Alternate<1>>, //523,533,563,573,503
             gpio::PE15<Alternate<1>>, //523,533,563,573
             gpio::PH12<Alternate<1>>, //563,573
+            gpio::PA4<Alternate<14>>, //503
+            gpio::PB3<Alternate<14>>, //503
         ]
         BRK2: [
             gpio::PE6<Alternate<1>>, //523,533,563,573
             gpio::PG4<Alternate<1>>, //523,533,563,573
+            gpio::PB8<Alternate<1>>, //503
+            gpio::PC10<Alternate<1>>, //503
+            gpio::PC11<Alternate<14>>, //503
         ]
         ETR: [
-            gpio::PA12<Alternate<1>>, //523,533,563,573
+            gpio::PA12<Alternate<1>>, //523,533,563,573,503
             gpio::PE7<Alternate<1>>, //523,533,563,573
             gpio::PG5<Alternate<1>>, //523,533,563,573
+            gpio::PC0<Alternate<1>>, //503
+            gpio::PA13<Alternate<14>>, //503
+            gpio::PB0<Alternate<14>>, //503
         ]
-    pac::TIM2: //523,533,563,573
+    pac::TIM2: //523,533,563,573,503
         CH1(ComplementaryImpossible): [
-            gpio::PA0<Alternate<1>>, //523,533,563,573
-            gpio::PA5<Alternate<1>>, //523,533,563,573
-            gpio::PA15<Alternate<1>>, //523,533,563,573
+            gpio::PA0<Alternate<1>>, //523,533,563,573,503
+            gpio::PA5<Alternate<1>>, //523,533,563,573,503
+            gpio::PA15<Alternate<1>>, //523,533,563,573,503
+            gpio::PB2<Alternate<14>>, //503
         ]
         CH2(ComplementaryImpossible): [
-            gpio::PA1<Alternate<1>>, //523,533,563,573
-            gpio::PB3<Alternate<1>>, //523,533,563,573
+            gpio::PA1<Alternate<1>>, //523,533,563,573,503
+            gpio::PB3<Alternate<1>>, //523,533,563,573,503
+            gpio::PC11<Alternate<1>>, //503
         ]
         CH3(ComplementaryImpossible): [
-            gpio::PA2<Alternate<1>>, //523,533,563,573
-            gpio::PB10<Alternate<1>>, //523,533,563,573
+            gpio::PA2<Alternate<1>>, //523,533,563,573,503
+            gpio::PB10<Alternate<1>>, //523,533,563,573,503
+            gpio::PD2<Alternate<1>>, //503
+            gpio::PA7<Alternate<14>>, //503
         ]
         CH4(ComplementaryImpossible): [
-            gpio::PA3<Alternate<1>>, //523,533,563,573
-            gpio::PC4<Alternate<1>>, //523,533,563,573
+            gpio::PA3<Alternate<1>>, //523,533,563,573,503
+            gpio::PC4<Alternate<1>>, //523,533,563,573,503
             gpio::PB11<Alternate<1>>, //563,573
+            gpio::PC12<Alternate<1>>, //503
+            gpio::PA12<Alternate<14>>, //503
         ]
         CH1N: []
         CH2N: []
         BRK: []
         BRK2: []
         ETR: [
-            gpio::PA0<Alternate<14>>, //523,533,563,573
-            gpio::PA5<Alternate<14>>, //523,533,563,573
-            gpio::PA15<Alternate<14>>, //523,533,563,573
+            gpio::PA0<Alternate<14>>, //523,533,563,573,503
+            gpio::PA5<Alternate<14>>, //523,533,563,573,503
+            gpio::PA15<Alternate<14>>, //523,533,563,573,503
+            gpio::PD2<Alternate<14>>, //503
         ]
-    pac::TIM3: //523,533,563,573
+    pac::TIM3: //523,533,563,573,503
         CH1(ComplementaryImpossible): [
-            gpio::PA6<Alternate<2>>, //523,533,563,573
-            gpio::PB4<Alternate<2>>, //523,533,563,573
-            gpio::PC6<Alternate<2>>, //523,533,563,573
+            gpio::PA6<Alternate<2>>, //523,533,563,573,503
+            gpio::PB4<Alternate<2>>, //523,533,563,573,503
+            gpio::PC6<Alternate<2>>, //523,533,563,573,503
+            gpio::PA0<Alternate<2>>, //503
+            gpio::PA14<Alternate<2>>, //503
         ]
         CH2(ComplementaryImpossible): [
-            gpio::PA7<Alternate<2>>, //523,533,563,573
-            gpio::PB5<Alternate<2>>, //523,533,563,573
-            gpio::PC7<Alternate<2>>, //523,533,563,573
+            gpio::PA7<Alternate<2>>, //523,533,563,573,503
+            gpio::PB5<Alternate<2>>, //523,533,563,573,503
+            gpio::PC7<Alternate<2>>, //523,533,563,573,503
+            gpio::PA11<Alternate<2>>, //503
         ]
         CH3(ComplementaryImpossible): [
-            gpio::PB0<Alternate<2>>, //523,533,563,573
-            gpio::PC8<Alternate<2>>, //523,533,563,573
+            gpio::PB0<Alternate<2>>, //523,533,563,573,503
+            gpio::PC8<Alternate<2>>, //523,533,563,573,503
+            gpio::PA8<Alternate<2>>, //503
+            gpio::PB6<Alternate<2>>, //503
         ]
         CH4(ComplementaryImpossible): [
-            gpio::PB1<Alternate<2>>, //523,533,563,573
-            gpio::PC9<Alternate<2>>, //523,533,563,573
+            gpio::PB1<Alternate<2>>, //523,533,563,573,503
+            gpio::PC9<Alternate<2>>, //523,533,563,573,503
+            gpio::PA12<Alternate<2>>, //503
+            gpio::PB15<Alternate<14>>, //503
         ]
         CH1N: []
         CH2N: []
         BRK: []
         BRK2: []
         ETR: [
-            gpio::PD2<Alternate<2>>, //523,533,563,573
+            gpio::PD2<Alternate<2>>, //523,533,563,573,503
+            gpio::PA2<Alternate<2>>, //503
+            gpio::PB7<Alternate<2>>, //503
+            gpio::PC1<Alternate<2>>, //503
         ]
     pac::TIM4: //523,533,563,573
         CH1(ComplementaryImpossible): [
