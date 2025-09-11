@@ -174,7 +174,7 @@ use crate::pac;
 
 use crate::rcc::{rec, CoreClocks, ResetEnable};
 use crate::time::{Hertz, NanoSeconds};
-use crate::timer::GetClk;
+use crate::timer::{GetClk, Event};
 use fugit::ExtU32;
 
 // This trait marks that a GPIO pin can be used with a specific timer channel
@@ -839,6 +839,49 @@ macro_rules! tim_hal {
                             fault_polarity: polarity,
                             deadtime: self.deadtime,
                         }
+                    }
+                }
+
+                impl<F> PwmControl<$TIMX, F> {
+                    /// Start listening for `event`
+                    pub fn listen(&mut self, event: Event) {
+                        match event {
+                            Event::TimeOut => {
+                                let tim = unsafe { <$TIMX>::steal() };
+                                // Enable update event interrupt
+                                tim.dier().write(|w| w.uie().set_bit());
+                            }
+                        }
+                    }
+
+                    /// Stop listening for `event`
+                    pub fn unlisten(&mut self, event: Event) {
+                        match event {
+                            Event::TimeOut => {
+                                let tim = unsafe { <$TIMX>::steal() };
+                                // Disable update event interrupt
+                                tim.dier().write(|w| w.uie().clear_bit());
+                                let _ = tim.dier().read();
+                                let _ = tim.dier().read(); // Delay 2 peripheral clocks
+                            }
+                        }
+                    }
+
+                    /// Check if Update Interrupt flag is cleared
+                    pub fn is_irq_clear(&mut self) -> bool {
+                        let tim = unsafe { <$TIMX>::steal() };
+                        tim.sr().read().uif().bit_is_clear()
+                    }
+
+                    /// Clears interrupt flag
+                    pub fn clear_irq(&mut self) {
+                        let tim = unsafe { <$TIMX>::steal() };
+                        tim.sr().modify(|_, w| {
+                            // Clears timeout event
+                            w.uif().clear_bit()
+                        });
+                        let _ = tim.sr().read();
+                        let _ = tim.sr().read(); // Delay 2 peripheral clocks
                     }
                 }
 
