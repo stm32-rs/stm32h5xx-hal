@@ -79,6 +79,13 @@ log = { version = "0.4.20", optional = true}
 futures-util = { version = "0.3", default-features = false, features = ["async-await-macro"], optional = true}
 stm32-usbd = "0.8.0"
 
+##
+embedded-hal-02 = { package = "embedded-hal", version = "0.2.6", features = ["unproven"] }
+nb = "1.0.0"
+void = { version = "1.0.2", default-features = false }
+cast = { version = "0.3.0", default-features = false }
+##
+
 [dev-dependencies]
 log = { version = "0.4.20"}
 cortex-m-rt = "0.7.3"
@@ -104,6 +111,10 @@ opt-level = "s" # optimize for binary size
 
 [[example]]
 name = "blinky"
+
+[[example]]
+name = "blinky_timer"
+required-features = ["stm32h533"]
 
 [[example]]
 name = "i2c"
