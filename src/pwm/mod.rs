@@ -203,12 +203,6 @@ pub trait ExternalTriggerPins<TIM> {}
 
 /// Channel wrapper
 pub struct Ch<const C: u8>;
-impl<const C: u8> Ch<C> {
-    const EN: u32 = 1 << (C * 4);
-    const POL: u32 = 1 << (C * 4 + 1);
-    const N_EN: u32 = 1 << (C * 4 + 2);
-    const N_POL: u32 = 1 << (C * 4 + 3);
-}
 
 /// Marker struct for PWM channel 1 on Pins trait and Pwm struct
 pub const C1: u8 = 0;
@@ -426,152 +420,6 @@ pins_tuples! {
     (C4, C1, C2, C3)
 }
 
-// Pin definitions, mark which pins can be used with which timers and channels
-macro_rules! pins {
-    // Single channel timer
-    ($($TIMX:ty: OUT: [$($OUT:ty),*])+) => {
-        $(
-            $(
-                impl Pins<$TIMX, Ch<C1>, ComplementaryImpossible> for $OUT {
-                    type Channel = Pwm<$TIMX, C1, ComplementaryImpossible>;
-                    fn split() -> Self::Channel {
-                        Pwm::new()
-                    }
-                }
-            )*
-        )+
-    };
-    // Dual channel timer $pm
-    ($($TIMX:ty:
-        CH1($COMP1:ty): [$($( #[ $pmeta1:meta ] )* $CH1:ty),*]
-        CH2($COMP2:ty): [$($( #[ $pmeta2:meta ] )* $CH2:ty),*]
-        CH1N: [$($( #[ $pmeta3:meta ] )* $CH1N:ty),*]
-        CH2N: [$($( #[ $pmeta4:meta ] )* $CH2N:ty),*]
-        BRK:  [$($( #[ $pmeta5:meta ] )* $BRK:ty),*]
-        BRK2: [$($( #[ $pmeta6:meta ] )* $BRK2:ty),*]
-    )+) => {
-        $(
-            $(
-                $( #[ $pmeta1 ] )*
-                impl Pins<$TIMX, Ch<C1>, $COMP1> for $CH1 {
-                    type Channel = Pwm<$TIMX, C1, $COMP1>;
-                    fn split() -> Self::Channel {
-                        Pwm::new()
-                    }
-                }
-            )*
-            $(
-                $( #[ $pmeta2 ] )*
-                impl Pins<$TIMX, Ch<C2>, $COMP2> for $CH2 {
-                    type Channel = Pwm<$TIMX, C2, $COMP2>;
-                    fn split() -> Self::Channel {
-                        Pwm::new()
-                    }
-                }
-            )*
-            $(
-                $( #[ $pmeta3 ] )*
-                impl NPins<$TIMX, Ch<C1>> for $CH1N {}
-            )*
-            $(
-                $( #[ $pmeta4 ] )*
-                impl NPins<$TIMX, Ch<C2>> for $CH2N {}
-            )*
-            $(
-                $( #[ $pmeta5 ] )*
-                impl FaultPins<$TIMX,> for $BRK {
-                    const INPUT: BreakInput = BreakInput::BreakIn;
-                }
-            )*
-            $(
-                $( #[ $pmeta6 ] )*
-                impl FaultPins<$TIMX> for $BRK2 {
-                    const INPUT: BreakInput = BreakInput::BreakIn2;
-                }
-            )*
-        )+
-    };
-    // Quad channel timers
-    ($($TIMX:ty:
-       CH1($COMP1:ty): [$($( #[ $pmeta1:meta ] )* $CH1:ty),*]
-       CH2($COMP2:ty): [$($( #[ $pmeta2:meta ] )* $CH2:ty),*]
-       CH3($COMP3:ty): [$($( #[ $pmeta3:meta ] )* $CH3:ty),*]
-       CH4($COMP4:ty): [$($( #[ $pmeta4:meta ] )* $CH4:ty),*]
-       CH1N: [$($( #[ $pmeta5:meta ] )* $CH1N:ty),*]
-       CH2N: [$($( #[ $pmeta6:meta ] )* $CH2N:ty),*]
-       CH3N: [$($( #[ $pmeta7:meta ] )* $CH3N:ty),*]
-       CH4N: [$($( #[ $pmeta8:meta ] )* $CH4N:ty),*]
-       BRK:  [$($( #[ $pmeta9:meta ] )* $BRK:ty),*]
-       BRK2: [$($( #[ $pmeta10:meta ] )* $BRK2:ty),*]
-    )+) => {
-        $(
-            $(
-                $( #[ $pmeta1 ] )*
-                impl Pins<$TIMX, Ch<C1>, $COMP1> for $CH1 {
-                    type Channel = Pwm<$TIMX, C1, $COMP1>;
-                    fn split() -> Self::Channel {
-                        Pwm::new()
-                    }
-                }
-            )*
-            $(
-                $( #[ $pmeta2 ] )*
-                impl Pins<$TIMX, Ch<C2>, $COMP2> for $CH2 {
-                    type Channel = Pwm<$TIMX, C2, $COMP2>;
-                    fn split() -> Self::Channel {
-                        Pwm::new()
-                    }
-                }
-            )*
-            $(
-                $( #[ $pmeta3 ] )*
-                impl Pins<$TIMX, Ch<C3>, $COMP3> for $CH3 {
-                    type Channel = Pwm<$TIMX, C3, $COMP3>;
-                    fn split() -> Self::Channel {
-                        Pwm::new()
-                    }
-                }
-            )*
-            $(
-                $( #[ $pmeta4 ] )*
-                impl Pins<$TIMX, Ch<C4>, $COMP4> for $CH4 {
-                    type Channel = Pwm<$TIMX, C4, $COMP4>;
-                    fn split() -> Self::Channel {
-                        Pwm::new()
-                    }
-                }
-            )*
-            $(
-                $( #[ $pmeta5 ] )*
-                impl NPins<$TIMX, Ch<C1>> for $CH1N {}
-            )*
-            $(
-                $( #[ $pmeta6 ] )*
-                impl NPins<$TIMX, Ch<C2>> for $CH2N {}
-            )*
-            $(
-                $( #[ $pmeta7 ] )*
-                impl NPins<$TIMX, Ch<C3>> for $CH3N {}
-            )*
-            $(
-                $( #[ $pmeta8 ] )*
-                impl NPins<$TIMX, Ch<C4>> for $CH4N {}
-            )*
-            $(
-                $( #[ $pmeta9 ] )*
-                impl FaultPins<$TIMX> for $BRK {
-                    const INPUT: BreakInput = BreakInput::BreakIn;
-                }
-            )*
-            $(
-                $( #[ $pmeta10 ] )*
-                impl FaultPins<$TIMX> for $BRK2 {
-                    const INPUT: BreakInput = BreakInput::BreakIn2;
-                }
-            )*
-        )+
-    }
-}
 // Period and prescaler calculator for 32-bit timers
 // Returns (arr, psc)
 fn calculate_frequency_32bit(
@@ -1026,16 +874,16 @@ tim_hal! {
     pac::TIM7: (tim7, Tim7, u16, 16),
 }
 
-#[cfg(feature="rm0481")]
+#[cfg(feature = "rm0481")]
 tim_hal! {
     pac::TIM4: (tim4, Tim4, u16, 16, DIR: cms),
     pac::TIM5: (tim5, Tim5, u32, 32, DIR: cms),
     pac::TIM8: (tim8, Tim8, u16, 16, DIR: cms, BDTR: bdtr, enabled, af1, clear_bit, clear_bit),
     //pac::TIM12: (tim12, Tim12, u16, 16),
-    pac::TIM15: (tim15, Tim15, u16, 16, BDTR: bdtr, set_bit, af1, set_bit),    
+    pac::TIM15: (tim15, Tim15, u16, 16, BDTR: bdtr, set_bit, af1, set_bit),
 } // TODO: TIM12 seems to be missing for 523's pac, re add once fixed
 
-#[cfg(feature="h56x_h573")]
+#[cfg(feature = "h56x_h573")]
 tim_hal! {
     pac::TIM13: (tim13, Tim13, u16, 16),
     pac::TIM14: (tim14, Tim14, u16, 16),
@@ -1241,7 +1089,7 @@ tim_pin_hal! {
         (C1, ccmr1_output, oc1pe, oc1m),
         (C2, ccmr1_output, oc2pe, oc2m),
 }*/ // TODO: TIM12 seems to be missing for 523's pac, re add once fixed
-#[cfg(feature="rm0481")]
+#[cfg(feature = "rm0481")]
 tim_pin_hal! {
     pac::TIM15, u16, ccne:
         (C1, ccmr1_output, oc1pe, oc1m),
@@ -1249,19 +1097,19 @@ tim_pin_hal! {
 }
 
 // Single channel timers
-#[cfg(feature="h56x_h573")]
+#[cfg(feature = "h56x_h573")]
 tim_pin_hal! {
     pac::TIM13, u16: (C1, ccmr1_output, oc1pe, oc1m),
 }
-#[cfg(feature="h56x_h573")]
+#[cfg(feature = "h56x_h573")]
 tim_pin_hal! {
     pac::TIM14, u16: (C1, ccmr1_output, oc1pe, oc1m),
 }
-#[cfg(feature="h56x_h573")]
+#[cfg(feature = "h56x_h573")]
 tim_pin_hal! {
     pac::TIM16, u16: (C1, ccmr1_output, oc1pe, oc1m),
 }
-#[cfg(feature="h56x_h573")]
+#[cfg(feature = "h56x_h573")]
 tim_pin_hal! {
     pac::TIM17, u16: (C1, ccmr1_output, oc1pe, oc1m),
 }
@@ -1288,7 +1136,7 @@ tim_pin_hal! {
         (C3, ccmr2_output, oc3pe, oc3m),
         (C4, ccmr2_output, oc4pe, oc4m),
 }
-#[cfg(feature="rm0481")]
+#[cfg(feature = "rm0481")]
 tim_pin_hal! {
     pac::TIM4, u16:
         (C1, ccmr1_output, oc1pe, oc1m),
@@ -1296,7 +1144,7 @@ tim_pin_hal! {
         (C3, ccmr2_output, oc3pe, oc3m),
         (C4, ccmr2_output, oc4pe, oc4m),
 }
-#[cfg(feature="rm0481")]
+#[cfg(feature = "rm0481")]
 tim_pin_hal! {
     pac::TIM5, u32:
         (C1, ccmr1_output, oc1pe, oc1m),
@@ -1304,7 +1152,7 @@ tim_pin_hal! {
         (C3, ccmr2_output, oc3pe, oc3m),
         (C4, ccmr2_output, oc4pe, oc4m),
 }
-#[cfg(feature="rm0481")]
+#[cfg(feature = "rm0481")]
 tim_pin_hal! {
     pac::TIM8, u16, ccne:
         (C1, ccmr1_output, oc1pe, oc1m),
