@@ -54,7 +54,6 @@ pub fn get_reset_reason(rcc: &mut crate::stm32::RCC) -> ResetReason {
 
 /// Gives the reason why the mcu was reset
 #[derive(Debug, Copy, Clone)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ResetReason {
     /// The mcu went from not having power to having power and resetting
     PowerOnReset,
