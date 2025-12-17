@@ -292,6 +292,7 @@ pub struct NoMiso;
 pub struct NoMosi;
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Inner<SPI, W: Word> {
     spi: SPI,
     _word: PhantomData<W>,
@@ -299,6 +300,7 @@ pub struct Inner<SPI, W: Word> {
 
 /// Spi in Master mode
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Spi<SPI, W: Word = u8> {
     inner: Inner<SPI, W>,
     _word: PhantomData<W>,

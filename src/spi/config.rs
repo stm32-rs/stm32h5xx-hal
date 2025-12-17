@@ -42,6 +42,7 @@ impl From<CommunicationMode> for COMM {
 
 /// The endianness with which to send the data
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Endianness {
     /// Least significant bit first
     LsbFirst,

@@ -33,6 +33,7 @@ impl UsbExt for stm32::USB {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct UsbDevice {
     /// USB register block
     _usb: USB,
