@@ -238,6 +238,7 @@ pub enum TargetError {
 /// Target and the target must read data from the bus.
 /// A Stop event indicates that a Stop condition was received and the transaction has been completed.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TargetEvent {
     /// The controller initiated an I2C Read operation, requiring that the Target must write to the
     /// bus.

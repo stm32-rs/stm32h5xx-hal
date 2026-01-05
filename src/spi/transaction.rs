@@ -172,6 +172,7 @@ impl<W> Op<W> for TransferInplace<'_, W> {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Transaction<OP, W> {
     op: OP,
     _word_type: PhantomData<W>,
