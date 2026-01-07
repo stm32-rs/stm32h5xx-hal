@@ -102,7 +102,7 @@ impl Config {
             invert_rx: false,
             invert_tx: false,
             rx_fifo_threshold: FifoThreshold::Eighth,
-            tx_fifo_threshold: FifoThreshold::Eighth,
+            tx_fifo_threshold: FifoThreshold::SevenEighth,
             half_duplex: false,
             word_size: WordSize::DataBits8,
         }

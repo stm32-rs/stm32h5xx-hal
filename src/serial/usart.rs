@@ -485,7 +485,7 @@ impl<USART: Instance, W: WordBits> Serial<USART, W> {
 
                 if config.last_bit_clock_pulse {
                     w.lbcl().output()
-                }else {
+                } else {
                     w.lbcl().not_output()
                 };
 
@@ -498,7 +498,6 @@ impl<USART: Instance, W: WordBits> Serial<USART, W> {
                     ClockPhase::First => w.cpha().first(),
                     ClockPhase::Second => w.cpha().second(),
                 };
-
             } else {
                 w.clken().disabled();
             }
@@ -657,12 +656,12 @@ impl<USART: Instance, W: WordBits> Inner<USART, W> {
     }
 
     /// Return true if the tx register is empty (and can accept data)
-    fn is_txe(&self) -> bool {
-        self.usart.isr().read().txfe().bit_is_set()
+    fn is_tx_empty(&self) -> bool {
+        self.usart.isr().read().txfe().is_empty()
     }
 
     /// Return true if the rx register is not empty (and can be read)
-    fn is_rxne(&mut self) -> Result<bool, Error> {
+    fn is_data_ready(&mut self) -> Result<bool, Error> {
         let isr = self.usart.isr().read();
 
         match check_status_error!(isr) {
@@ -673,7 +672,7 @@ impl<USART: Instance, W: WordBits> Inner<USART, W> {
             }
         };
 
-        Ok(isr.rxfne().bit_is_set())
+        Ok(isr.rxfne().is_data_ready())
     }
 
     fn read_data(&mut self) -> W {
@@ -700,17 +699,7 @@ impl<USART: Instance, W: WordBits> Inner<USART, W> {
     }
 
     fn read_if_ready(&mut self, word: &mut W) -> Result<bool, Error> {
-        let isr = self.usart.isr().read();
-
-        match check_status_error!(isr) {
-            Ok(()) => {}
-            Err(error) => {
-                self.clear_error_flag(error);
-                return Err(error);
-            }
-        };
-
-        if isr.rxfne().bit_is_set() {
+        if self.is_data_ready()? {
             *word = self.read_data();
             Ok(true)
         } else {
@@ -719,7 +708,7 @@ impl<USART: Instance, W: WordBits> Inner<USART, W> {
     }
 
     fn write_if_ready(&mut self, word: W) -> Result<bool, Error> {
-        if self.usart.isr().read().txfnf().bit_is_set() {
+        if self.is_tx_empty() {
             self.write_data(word);
             Ok(true)
         } else {
@@ -772,7 +761,7 @@ impl<USART: Instance> io::Read for Serial<USART, u8> {
 
 impl<USART: Instance> io::ReadReady for Serial<USART, u8> {
     fn read_ready(&mut self) -> Result<bool, Self::Error> {
-        self.is_rxne()
+        self.is_data_ready()
     }
 }
 
@@ -795,6 +784,6 @@ impl<USART: Instance> io::Write for Serial<USART, u8> {
 
 impl<USART: Instance> io::WriteReady for Serial<USART, u8> {
     fn write_ready(&mut self) -> Result<bool, Self::Error> {
-        Ok(self.is_txe())
+        Ok(self.is_tx_empty())
     }
 }
