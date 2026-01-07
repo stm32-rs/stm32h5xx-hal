@@ -64,6 +64,8 @@
 //! [io::WriteReady]: https://docs.rs/embedded-io/0.6.1/embedded_io/trait.WriteReady.html
 //! [embedded-io]: https://docs.rs/embedded-io/0.6.1/embedded_io/
 
+use core::fmt::Display;
+
 use embedded_io::{Error as IoError, ErrorKind as IoErrorKind};
 
 pub mod config;
@@ -86,6 +88,13 @@ pub enum Error {
     Parity,
 }
 
+impl Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl core::error::Error for Error {}
 
 impl IoError for Error {
     fn kind(&self) -> IoErrorKind {
