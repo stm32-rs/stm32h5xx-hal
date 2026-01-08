@@ -401,7 +401,7 @@ impl<USART: Instance, W: WordBits> Serial<USART, W> {
     /// Releases the USART peripheral
     pub fn free(self) -> USART {
         // Wait until both TXFIFO and shift register are empty
-        while self.usart.isr().read().tc().bit_is_clear() {}
+        while self.usart.isr().read().tc().is_tx_not_complete() {}
 
         self.inner.usart
     }
@@ -428,13 +428,13 @@ impl<USART, W: WordBits> Inner<USART, W> {
 
 macro_rules! check_status_error {
     ($isr:expr) => {
-        if $isr.pe().bit_is_set() {
+        if $isr.pe().is_error() {
             Err(Error::Parity)
-        } else if $isr.fe().bit_is_set() {
+        } else if $isr.fe().is_error() {
             Err(Error::Framing)
-        } else if $isr.ne().bit_is_set() {
+        } else if $isr.ne().is_noise() {
             Err(Error::Noise)
-        } else if $isr.ore().bit_is_set() {
+        } else if $isr.ore().is_overrun() {
             Err(Error::Overrun)
         } else {
             Ok(())
@@ -443,56 +443,12 @@ macro_rules! check_status_error {
 }
 
 impl<USART: Instance, W: WordBits> Inner<USART, W> {
-    /// Starts listening for an interrupt event
-    pub fn listen(&mut self, event: Event) {
-        match event {
-            Event::RxNotEmpty => {
-                self.usart.cr1().modify(|_, w| w.rxneie().enabled());
-            }
-            Event::TxNotFull => {
-                self.usart.cr1().modify(|_, w| w.txeie().enabled());
-            }
-            Event::Idle => {
-                self.usart.cr1().modify(|_, w| w.idleie().enabled());
-            }
-            Event::TxFifoThreshold => {
-                self.usart.cr3().modify(|_, w| w.txftie().set_bit());
-            }
-            Event::RxFifoThreshold => {
-                self.usart.cr3().modify(|_, w| w.rxftie().set_bit());
-            }
-        }
-    }
-
-    /// Stop listening for an interrupt event
-    pub fn unlisten(&mut self, event: Event) {
-        match event {
-            Event::RxNotEmpty => {
-                self.usart.cr1().modify(|_, w| w.rxneie().disabled());
-            }
-            Event::TxNotFull => {
-                self.usart.cr1().modify(|_, w| w.txeie().disabled());
-            }
-            Event::Idle => {
-                self.usart.cr1().modify(|_, w| w.idleie().disabled());
-            }
-            Event::TxFifoThreshold => {
-                self.usart.cr3().modify(|_, w| w.txftie().clear_bit());
-            }
-            Event::RxFifoThreshold => {
-                self.usart.cr3().modify(|_, w| w.rxftie().clear_bit());
-            }
-        }
-        let _ = self.usart.cr1().read();
-        let _ = self.usart.cr1().read(); // Delay 2 peripheral clocks
-    }
-
     /// Return true if the line idle status is set
     ///
     /// The line idle status bit is set when the peripheral detects the receive line is idle.
     /// The bit is cleared by software, by calling `clear_idle()`.
     pub fn is_idle(&self) -> bool {
-        self.usart.isr().read().idle().bit_is_set()
+        self.usart.isr().read().idle().is_idle()
     }
 
     /// Clear the line idle status bit
@@ -507,7 +463,7 @@ impl<USART: Instance, W: WordBits> Inner<USART, W> {
     /// The busy status bit is set when there is communication active on the receive line,
     /// and reset at the end of reception.
     pub fn is_busy(&self) -> bool {
-        self.usart.isr().read().busy().bit_is_set()
+        self.usart.isr().read().busy().is_busy()
     }
 
     /// Return true if the tx register is empty (and can accept data)
@@ -572,7 +528,7 @@ impl<USART: Instance, W: WordBits> Inner<USART, W> {
     }
 
     fn is_transmit_complete(&mut self) -> bool {
-        self.usart.isr().read().tc().bit_is_set()
+        self.usart.isr().read().tc().is_tx_complete()
     }
 
     fn read_words(&mut self, words: &mut [W]) -> Result<usize, Error> {
