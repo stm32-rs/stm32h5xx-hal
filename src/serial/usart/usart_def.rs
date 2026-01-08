@@ -302,9 +302,9 @@ mod rm0481_common {
 
 #[cfg(feature = "h56x_h573")]
 mod h56x_h573 {
-    use stm32h5::stm32h573::rcc::ccipr2;
-
-    use crate::stm32::{UART12, UART7, UART8, UART9, USART10, USART11};
+    use crate::stm32::{
+        rcc::ccipr2, UART12, UART7, UART8, UART9, USART10, USART11,
+    };
 
     use super::*;
 
