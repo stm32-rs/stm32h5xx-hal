@@ -236,7 +236,7 @@ mod rm0481_common {
                 NoCk,
                 gpio::PB12<Alternate<7>>,
                 gpio::PC12<Alternate<7>>,
-                gpio::PD10<Alternate<13>>
+                gpio::PD10<Alternate<7>>
             ]
         UART4:
             TX: [
@@ -245,7 +245,7 @@ mod rm0481_common {
                 gpio::PA12<Alternate<6>>,
                 gpio::PB9<Alternate<8>>,
                 gpio::PC10<Alternate<8>>,
-                gpio::PD1<Alternate<7>>,
+                gpio::PD1<Alternate<8>>,
                 gpio::PD12<Alternate<8>>
             ]
             RX: [
