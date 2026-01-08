@@ -71,7 +71,7 @@ use embedded_io::{Error as IoError, ErrorKind as IoErrorKind};
 pub mod config;
 pub(crate) mod usart;
 
-pub use usart::{Instance, Serial, PinCk, PinRx, PinTx, NoCk, NoRx, NoTx};
+pub use usart::{Instance, NoCk, NoRx, NoTx, PinCk, PinRx, PinTx, Serial};
 
 /// Serial error
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
