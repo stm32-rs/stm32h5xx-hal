@@ -15,18 +15,16 @@ use embedded_io as io;
 #[cfg(feature = "log")]
 use log::debug;
 
-use crate::gpio::{self, Alternate};
-use crate::rcc::{rec, CoreClocks, ResetEnable};
+use crate::rcc::{CoreClocks, ResetEnable};
 use crate::stm32::{
-    rcc::ccipr1,
     usart1,
     usart1::cr1::{M0, M1, PCE, PS},
     usart1::cr3::{RXFTCFG, TXFTCFG},
     usart1::presc::PRESCALER,
-    RCC, USART1, USART2, USART3,
 };
-
 use crate::time::Hertz;
+
+mod usart_def;
 
 pub trait Pins<USART> {
     const SYNCHRONOUS: bool = false;
@@ -58,114 +56,12 @@ pub struct NoRx;
 /// A filler type for when the Ck pin is unnecessary
 pub struct NoCk;
 
-macro_rules! usart_pins {
-    ($($USARTX:ty: TX: [$($TX:ty),*] RX: [$($RX:ty),*] CK: [$($CK:ty),*])+) => {
-        $(
-            $(
-                impl PinTx<$USARTX> for $TX {}
-            )*
-            $(
-                impl PinRx<$USARTX> for $RX {}
-            )*
-            $(
-                impl PinCk<$USARTX> for $CK {}
-            )*
-        )+
-    }
-}
-
-usart_pins! {
-    USART1:
-        TX: [
-            NoTx,
-            gpio::PA2<Alternate<8>>,
-            gpio::PA9<Alternate<7>>,
-            gpio::PA12<Alternate<8>>,
-            gpio::PA14<Alternate<7>>,
-            gpio::PB6<Alternate<7>>,
-            gpio::PB14<Alternate<4>>
-        ]
-        RX: [
-            NoRx,
-            gpio::PA1<Alternate<8>>,
-            gpio::PA10<Alternate<7>>,
-            gpio::PA11<Alternate<8>>,
-            gpio::PA13<Alternate<7>>,
-            gpio::PB7<Alternate<7>>,
-            gpio::PB15<Alternate<4>>
-        ]
-        CK: [
-            NoCk,
-            gpio::PA3<Alternate<8>>,
-            gpio::PA8<Alternate<7>>,
-            gpio::PB8<Alternate<7>>,
-            gpio::PB12<Alternate<8>>
-        ]
-    USART2:
-        TX: [
-            NoTx,
-            gpio::PA2<Alternate<7>>,
-            gpio::PA5<Alternate<9>>,
-            gpio::PA8<Alternate<4>>,
-            gpio::PA12<Alternate<4>>,
-            gpio::PA14<Alternate<9>>,
-            gpio::PB0<Alternate<9>>,
-            gpio::PB4<Alternate<13>>,
-            gpio::PC6<Alternate<13>>
-        ]
-        RX: [
-            NoRx,
-            gpio::PA3<Alternate<7>>,
-            gpio::PA11<Alternate<4>>,
-            gpio::PA13<Alternate<9>>,
-            gpio::PA15<Alternate<9>>,
-            gpio::PB1<Alternate<9>>,
-            gpio::PB5<Alternate<13>>,
-            gpio::PB15<Alternate<13>>,
-            gpio::PC7<Alternate<13>>
-        ]
-        CK: [
-            NoCk,
-            gpio::PA4<Alternate<7>>,
-            gpio::PA15<Alternate<4>>,
-            gpio::PA1<Alternate<9>>,
-            gpio::PB2<Alternate<9>>,
-            gpio::PB6<Alternate<13>>,
-            gpio::PC8<Alternate<13>>
-        ]
-    USART3:
-        TX: [
-            NoTx,
-            gpio::PB10<Alternate<7>>,
-            gpio::PC10<Alternate<7>>,
-            gpio::PA4<Alternate<13>>,
-            gpio::PA8<Alternate<13>>,
-            gpio::PB3<Alternate<13>>,
-            gpio::PB7<Alternate<13>>
-        ]
-        RX: [
-            NoRx,
-            gpio::PC4<Alternate<7>>,
-            gpio::PC11<Alternate<7>>,
-            gpio::PA3<Alternate<13>>,
-            gpio::PA5<Alternate<13>>,
-            gpio::PA12<Alternate<13>>,
-            gpio::PA15<Alternate<13>>,
-            gpio::PB8<Alternate<13>>
-        ]
-        CK: [
-            NoCk,
-            gpio::PB12<Alternate<7>>,
-            gpio::PC12<Alternate<7>>,
-            gpio::PA0<Alternate<13>>,
-            gpio::PA7<Alternate<13>>,
-            gpio::PA9<Alternate<13>>,
-            gpio::PB10<Alternate<13>>
-        ]
+pub trait InstanceClock {
+    fn clock(clocks: &CoreClocks) -> Hertz;
 }
 
 pub trait Instance:
-    crate::Sealed + Deref<Target = usart1::RegisterBlock>
+    InstanceClock + crate::Sealed + Deref<Target = usart1::RegisterBlock>
 {
     type Rec: ResetEnable;
 
@@ -173,49 +69,8 @@ pub trait Instance:
     fn ptr() -> *const usart1::RegisterBlock;
 
     #[doc(hidden)]
-    fn clock(clocks: &CoreClocks) -> Hertz;
-
-    #[doc(hidden)]
     fn rec() -> Self::Rec;
 }
-
-// Implemented by all USART instances
-macro_rules! instance {
-    ($USARTX:ident: $UsartX:ident, $pclk:ident, $cciprX:ident) => {
-        paste::item! {
-            impl Instance for $USARTX {
-                type Rec = rec::$UsartX;
-
-                fn ptr() -> *const usart1::RegisterBlock {
-                    <$USARTX>::ptr() as *const _
-                }
-
-                fn clock(clocks: &CoreClocks) -> Hertz {
-                    let ccipr1 = unsafe { (*RCC::ptr()).ccipr1().read() };
-
-                    match ccipr1.[<$USARTX:lower sel>]().variant() {
-                        Some($cciprX::USARTSEL::Pclk) => Some(clocks.$pclk()),
-                        Some($cciprX::USARTSEL::Pll2Q) => clocks.pll2().q_ck(),
-                        Some($cciprX::USARTSEL::HsiKer) => clocks.hsi_ck(),
-                        Some($cciprX::USARTSEL::CsiKer) => clocks.csi_ck(),
-                        Some($cciprX::USARTSEL::Lse) => clocks.lse_ck(),
-                        _ => unreachable!(),
-                    }.expect("Source clock not enabled")
-                }
-
-                fn rec() -> Self::Rec {
-                    rec::$UsartX { _marker: PhantomData }
-                }
-            }
-
-            impl crate::Sealed for $USARTX {}
-        }
-    };
-}
-
-instance! { USART1: Usart1, pclk2, ccipr1 }
-instance! { USART2: Usart2, pclk1, ccipr1 }
-instance! { USART3: Usart3, pclk1, ccipr1 }
 
 /// Serial abstraction
 pub struct Serial<USART, W: WordBits = u8> {
