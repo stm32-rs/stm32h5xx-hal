@@ -1,6 +1,7 @@
 use crate::time::Hertz;
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum FifoThreshold {
     /// Only valid for Tx Threshold
     Empty,
@@ -19,13 +20,15 @@ pub enum FifoThreshold {
 /// hardware on receive. For example, `read()` would return [`Error::Parity`](super::Error::Parity).
 ///
 /// Note that parity bits are included in the serial word length, so if parity is used word length will be set to 9.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Parity {
     ParityNone,
     ParityEven,
     ParityOdd,
 }
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum StopBits {
     #[doc = "1 stop bit"]
     Stop1,
@@ -36,23 +39,27 @@ pub enum StopBits {
     #[doc = "1.5 stop bits"]
     Stop1p5,
 }
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum BitOrder {
     LsbFirst,
     MsbFirst,
 }
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ClockPhase {
     First,
     Second,
 }
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ClockPolarity {
     IdleHigh,
     IdleLow,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum WordSize {
     DataBits7,
     DataBits8,
@@ -66,7 +73,8 @@ pub enum WordSize {
 /// ```
 /// let config = Config::new().partity_odd();
 /// ```
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Config {
     pub baudrate: Hertz,
     pub parity: Parity,
