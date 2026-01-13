@@ -83,12 +83,7 @@ impl core::error::Error for Error {}
 
 impl IoError for Error {
     fn kind(&self) -> IoErrorKind {
-        match self {
-            Error::Overrun => IoErrorKind::Other,
-            Error::Framing => IoErrorKind::Other,
-            Error::Noise => IoErrorKind::Other,
-            Error::Parity => IoErrorKind::Other,
-        }
+        IoErrorKind::Other
     }
 }
 
