@@ -41,7 +41,7 @@
 //!
 //! # Examples
 //!
-//! - [Simple Blocking Example](https://github.com/stm32-rs/stm32h7xx-hal/blob/master/examples/serial.rs)
+//! - [Simple (Blocking) Example](https://github.com/stm32-rs/stm32h5xx-hal/blob/master/examples/usart.rs)
 //!
 //! [io::Read]: https://docs.rs/embedded-io/latest/embedded_io/trait.Read.html
 //! [io::ReadReady]: https://docs.rs/embedded-io/latest/embedded_io/trait.ReadReady.html

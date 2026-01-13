@@ -11,6 +11,8 @@ use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
 use core::ptr;
 
+#[cfg(feature = "defmt")]
+use defmt::debug;
 use embedded_io as io;
 #[cfg(feature = "log")]
 use log::debug;
@@ -248,10 +250,12 @@ impl<USART: Instance, W: WordBits> Serial<USART, W> {
             return Err(config::InvalidConfig);
         };
 
-        #[cfg(feature = "log")]
+        #[cfg(any(feature = "log", feature = "defmt"))]
         {
             let baudrate = usart_ker_ck_presc / usartdiv;
-            debug!("USART: Kernel clock: {ker_ck}; Prescalar: {div}; Over8: {over8}; BRR: {usartdiv:#X}; Baudrate: {baudrate}");
+            debug!("USART: Kernel clock: {}; Prescalar: {}; Over8: {}; BRR: {:#X}; Baudrate: {}",
+                   ker_ck, div, over8, usartdiv, baudrate
+            );
         }
 
         // Calculate baudrate divisor
