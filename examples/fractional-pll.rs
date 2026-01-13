@@ -31,7 +31,7 @@ fn main() -> ! {
         .pll2_r_ck(3_024_000.Hz())
         // pll2_p / 2 --> mco2
         .mco2_from_pll2_p_ck(7.MHz())
-        .freeze(pwrcfg, &dp.SBS);
+        .freeze(&pwrcfg, &dp.SBS);
 
     // // Enable MCO2 output pin
     // let gpioc = dp.GPIOC.split(ccdr.peripheral.GPIOC);
