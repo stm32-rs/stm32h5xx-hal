@@ -86,6 +86,9 @@ pub mod usb;
 pub mod gpdma;
 
 #[cfg(feature = "device-selected")]
+pub mod serial;
+
+#[cfg(feature = "device-selected")]
 mod sealed {
     pub trait Sealed {}
 }
