@@ -43,8 +43,7 @@ fn main() -> ! {
     led.set_low();
 
     let mut timer = dp.TIM2.timer(2.Hz(), ccdr.peripheral.TIM2, &ccdr.clocks);
-    timer.listen(timer::Event::TimeOut);
-
+    timer.enable_timeout_interrupt();
     cortex_m::interrupt::free(|cs| {
         LED.borrow(cs).replace(Some(led));
         TIMER.borrow(cs).replace(Some(timer));
@@ -69,7 +68,7 @@ fn main() -> ! {
 fn TIM2() {
     cortex_m::interrupt::free(|cs| {
         if let Some(timer) = TIMER.borrow(cs).borrow_mut().as_mut() {
-            timer.clear_irq();
+            let _ = timer.check_clear_timeout();
         }
         // Signal that the interrupt fired
         let led_is_on = LED_IS_ON.fetch_not(Ordering::Relaxed);

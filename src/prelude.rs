@@ -1,6 +1,4 @@
 //! Prelude
-pub use embedded_hal_02::prelude::*;
-
 pub use crate::delay::DelayExt as _stm32h5xx_hal_delay_DelayExt;
 pub use crate::dwt::DwtExt as _stm32h5xx_hal_delay_DwtExt;
 pub use crate::gpdma::GpdmaExt as _stm32h5xx_hal_gpdma_GpdmaExt;
