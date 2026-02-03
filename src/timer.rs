@@ -9,6 +9,8 @@ use core::marker::PhantomData;
 use crate::stm32::{TIM1, TIM2, TIM3, TIM6, TIM7};
 #[cfg(feature = "rm0481")]
 use crate::stm32::{/*TIM12,*/ TIM15, TIM4, TIM5, TIM8}; // TODO: TIM12 seems to be missing for 523's pac, re add once fixed
+#[cfg(feature = "h56x_h573")]
+use crate::stm32::{TIM13, TIM14, TIM16, TIM17};
 
 use crate::rcc::{rec, CoreClocks, ResetEnable};
 use crate::time::Hertz;
