@@ -55,9 +55,8 @@ macro_rules! timer {
         impl Basic for $TIMX {
             type Counter = $cntType;
             fn set_prescalar(&mut self, psc: u16) {
-                unsafe {
-                    self.psc().write(|w| w.psc().bits(psc));
-                }
+                self.psc().write(|w| w.psc().set(psc));
+
             }
 
             fn set_arr(&mut self, arr: Self::Counter) {
