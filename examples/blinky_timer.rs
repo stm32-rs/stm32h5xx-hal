@@ -13,15 +13,19 @@ use cortex_m::interrupt::Mutex;
 use cortex_m::peripheral::NVIC;
 use cortex_m_rt::entry;
 
-use stm32h5xx_hal::gpio::gpioa::PA5; // LED pin
-use stm32h5xx_hal::gpio::{Output, PushPull};
-use stm32h5xx_hal::{pac, pac::interrupt, prelude::*, timer};
+use stm32h5xx_hal::{
+    gpio::{gpioa::PA5, Output, PushPull},
+    pac,
+    pac::interrupt,
+    prelude::*,
+    timer,
+};
 use utilities::logger::info;
 
 static LED_IS_ON: AtomicBool = AtomicBool::new(false);
 static LED: Mutex<RefCell<Option<PA5<Output<PushPull>>>>> =
     Mutex::new(RefCell::new(None));
-static TIMER: Mutex<RefCell<Option<timer::Timer<pac::TIM2>>>> =
+static TIMER: Mutex<RefCell<Option<timer::Timeout<pac::TIM2>>>> =
     Mutex::new(RefCell::new(None));
 
 #[entry]
@@ -42,8 +46,9 @@ fn main() -> ! {
     let mut led = gpioa.pa5.into_push_pull_output();
     led.set_low();
 
-    let mut timer = dp.TIM2.timer(2.Hz(), ccdr.peripheral.TIM2, &ccdr.clocks);
+    let mut timer = dp.TIM2.timeout(ccdr.peripheral.TIM2, &ccdr.clocks);
     timer.enable_timeout_interrupt();
+    timer.start_with_frequency(2.Hz());
     cortex_m::interrupt::free(|cs| {
         LED.borrow(cs).replace(Some(led));
         TIMER.borrow(cs).replace(Some(timer));
@@ -68,7 +73,7 @@ fn main() -> ! {
 fn TIM2() {
     cortex_m::interrupt::free(|cs| {
         if let Some(timer) = TIMER.borrow(cs).borrow_mut().as_mut() {
-            let _ = timer.check_clear_timeout();
+            let _ = timer.check_clear_overflow();
         }
         // Signal that the interrupt fired
         let led_is_on = LED_IS_ON.fetch_not(Ordering::Relaxed);
