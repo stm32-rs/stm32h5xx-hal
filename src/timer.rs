@@ -65,7 +65,7 @@ pub use counters::{Tick, Timeout};
 /// Counter represents the word type used for setting the period of timer.
 /// Consult RM0492/RM0481 for which timer supports which word sizes.
 #[doc(hidden)]
-pub trait Counter: Into<u32> + TryFrom<u32> + From<u16> + Debug {
+pub trait Counter: crate::Sealed + Into<u32> + TryFrom<u32> + From<u16> + Debug {
     const MAX: Self;
 }
 
