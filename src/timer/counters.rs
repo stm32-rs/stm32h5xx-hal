@@ -91,7 +91,7 @@ impl<TIM: Instance + Basic> Timeout<TIM> {
         self.start(ticks);
     }
 
-    /// Convert into [`Tick`] timer.
+    /// Convert into [`Tick`] timer. Cancels any ongoing operation.
     pub fn into_tick_timer(mut self) -> Tick<TIM> {
         self.cancel();
         self.0.tick()
@@ -126,6 +126,7 @@ impl<TIM> DerefMut for Tick<TIM> {
 }
 
 impl<TIM: Instance + Basic> Tick<TIM> {
+    /// Start the tick timer
     pub fn start<T>(&mut self, frequency_hz: T)
     where
         T: Into<Hertz>,
@@ -163,7 +164,7 @@ impl<TIM: Instance + Basic> Tick<TIM> {
         self.tim.set_auto_reload(TIM::Counter::MAX);
     }
 
-    /// Convert to [`Timeout`] timer
+    /// Convert to [`Timeout`] timer. Cancels any ongoing operation.
     pub fn into_timeout_timer(mut self) -> Timeout<TIM> {
         self.cancel();
         self.0.timeout()
