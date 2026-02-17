@@ -1,9 +1,13 @@
 use core::marker::PhantomData;
 
 use crate::rcc::{rec, CoreClocks};
+#[cfg(all(feature = "rm0481", not(feature = "stm32h523")))]
+// TIM12 is not defined in the PAC for STM32H523. Remove this compiler switch when it is.
+use crate::stm32::TIM12;
 use crate::stm32::{TIM1, TIM2, TIM3, TIM6, TIM7};
 #[cfg(feature = "rm0481")]
-use crate::stm32::{TIM12, TIM15, TIM4, TIM5, TIM8};
+use crate::stm32::{TIM15, TIM4, TIM5, TIM8};
+
 #[cfg(feature = "h56x_h573")]
 use crate::stm32::{TIM13, TIM14, TIM16, TIM17};
 use crate::time::Hertz;
@@ -111,6 +115,7 @@ mod rm0481 {
     timer!(TIM4: u16, timx_ker_ck);
     timer!(TIM5: u32, timx_ker_ck);
     timer!(TIM15: u16, timy_ker_ck);
+    #[cfg(not(feature = "stm32h523"))]
     timer!(TIM12: u16, timx_ker_ck);
 }
 
