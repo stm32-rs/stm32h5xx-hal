@@ -108,7 +108,7 @@ name = "blinky"
 
 [[example]]
 name = "blinky_timer"
-required-features = ["stm32h533"]
+
 
 [[example]]
 name = "i2c"
