@@ -194,7 +194,7 @@ impl<TIM: Instance + Basic> Timer<TIM> {
     /// ```
     fn set_timeout_ticks(&mut self, ticks: u32) {
         let (psc, arr) = calculate_timeout_ticks_register_values(ticks);
-        self.tim.set_prescalar(psc.into());
+        self.tim.set_prescalar(psc);
         self.tim.set_auto_reload(arr.into());
     }
 
