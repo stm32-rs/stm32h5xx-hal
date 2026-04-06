@@ -371,10 +371,7 @@ impl<T: HardwareRequest, S: Word, D: Word> DmaConfig<T, S, D> {
 
 #[cfg(test)]
 mod test {
-    use crate::gpdma::{
-        config::{self, MemoryToMemory},
-        DmaConfig,
-    };
+    use crate::gpdma::{config::MemoryToMemory, DmaConfig};
 
     use super::*;
 
