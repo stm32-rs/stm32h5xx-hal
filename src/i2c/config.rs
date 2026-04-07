@@ -8,7 +8,7 @@ use super::AddressMode;
 /// let config = Config::new().secondary_address(0x10);
 /// ```
 #[derive(Copy, Clone)]
-pub struct TargetConfig {
+pub struct TargetConfig<T> {
     /// Address mode of the MCU acting as a target
     pub(crate) own_address_mode: AddressMode,
     /// Target address for MCU
@@ -18,23 +18,26 @@ pub struct TargetConfig {
     // Address mask for secondary mask
     pub(crate) secondary_address_mask_bits: Option<u8>,
     /// Frequency at which bus is expected to run.
-    pub(crate) bus_frequency_hz: u32,
+    pub(crate) timing: T,
 }
 
-impl TargetConfig {
-    /// Create a default configuration with the address of the MCU and the expected bus frequency.
+impl<T> TargetConfig<T> {
+    /// Create a default configuration with the address of the MCU and the expected bus timing.
     ///
     /// The address should be specified unshifted. 7-bit addressing mode is used by default.
     ///
-    /// If this is not known, use a lower bound in order to ensure that the correct timing
-    /// parameters are used.
-    pub const fn new(own_address: u16, bus_frequency_hz: u32) -> Self {
+    /// `timing` accepts anything that implements [`IntoTimingRegister`]: a [`Hertz`] frequency,
+    /// a [`RawTimingr`] pre-computed register value, explicit `(u8,u8,u8,u8,u8)` parameters,
+    /// or a [`Timing`] struct.
+    /// If a frequency is provided, the driver will compute the timing register value based on the
+    /// timing requirements of the I2C bus and the source clock frequency.
+    pub const fn new(own_address: u16, timing: T) -> Self {
         TargetConfig {
             own_address_mode: AddressMode::AddressMode7bit,
             own_address,
             secondary_address: None,
             secondary_address_mask_bits: None,
-            bus_frequency_hz,
+            timing,
         }
     }
 
