@@ -62,7 +62,7 @@ fn main() -> ! {
     }
 
     loop {
-        // do_nothing
+        cortex_m::asm::nop();
     }
 }
 
