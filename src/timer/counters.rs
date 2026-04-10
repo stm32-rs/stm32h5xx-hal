@@ -153,7 +153,9 @@ impl<TIM: Instance + Basic> Tick<TIM> {
     ///
     /// Counts from 0 to the counter's maximum value, then repeats.
     /// Because this only uses the timer prescaler, the frequency
-    /// is rounded to a multiple of the timer's kernel clock.
+    /// is rounded up to an integer fraction of the timer's kernel
+    /// clock. (ie. specifying 300kHz with a 1MHz kernel clock will
+    /// result in a tick frequency of 1MHz/3 = 333kHz)
     fn set_tick_frequency(&mut self, frequency: Hertz) {
         let div = self.clk / frequency.raw();
 
