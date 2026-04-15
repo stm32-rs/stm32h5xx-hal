@@ -6,12 +6,7 @@
 mod utilities;
 use embedded_hal::{delay::DelayNs, i2c::I2c};
 use fugit::SecsDurationU32;
-use stm32h5xx_hal::{
-    delay::Delay,
-    i2c::Instance,
-    pac,
-    prelude::*,
-};
+use stm32h5xx_hal::{delay::Delay, pac, prelude::*};
 
 use cortex_m_rt::entry;
 
@@ -48,8 +43,12 @@ fn main() -> ! {
     info!("");
 
     let bus_freq_hz = 100.kHz();
-    let i2c_ker_ck = pac::I2C2::clock(&ccdr.clocks);
-    let mut i2c = dp.I2C2.i2c((scl, sda), (i2c_ker_ck, bus_freq_hz), ccdr.peripheral.I2C2);
+    let mut i2c = dp.I2C2.i2c(
+        (scl, sda),
+        bus_freq_hz,
+        ccdr.peripheral.I2C2,
+        &ccdr.clocks,
+    );
 
     // The STM32H503 NUCLEO board does not have any I2C peripherals, so put in the address of
     // whatever peripheral you connect
