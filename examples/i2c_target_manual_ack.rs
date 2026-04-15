@@ -5,7 +5,7 @@
 #[macro_use]
 mod utilities;
 use stm32h5xx_hal::{
-    i2c::{TargetConfig, TargetEvent, TargetListenEvent, Targetable},
+    i2c::{Instance, TargetConfig, TargetEvent, TargetListenEvent, Targetable},
     pac,
     prelude::*,
 };
@@ -41,14 +41,15 @@ fn main() -> ! {
     info!("");
 
     let own_addr: u16 = 0x18;
-    let bus_freq_hz: u32 = 100_000;
+    let bus_freq_hz = 100.kHz();
+    let i2c_ker_ck = pac::I2C2::clock(&ccdr.clocks);
     let mut i2c = dp
         .I2C2
         .i2c_target_only(
             (scl, sda),
-            TargetConfig::new(own_addr, bus_freq_hz),
+            (i2c_ker_ck, bus_freq_hz),
+            TargetConfig::new(own_addr),
             ccdr.peripheral.I2C2,
-            &ccdr.clocks,
         )
         .with_manual_ack_control();
 
