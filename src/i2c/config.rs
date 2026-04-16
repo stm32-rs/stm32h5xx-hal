@@ -5,7 +5,7 @@ use super::AddressMode;
 /// This structure uses the builder pattern to generate the configuration:
 ///
 /// ```
-/// let config = Config::new().secondary_address(0x10);
+/// let config = TargetConfig::new(own_addr).secondary_address(0x10);
 /// ```
 #[derive(Copy, Clone)]
 pub struct TargetConfig {
@@ -17,24 +17,18 @@ pub struct TargetConfig {
     pub(crate) secondary_address: Option<u8>,
     // Address mask for secondary mask
     pub(crate) secondary_address_mask_bits: Option<u8>,
-    /// Frequency at which bus is expected to run.
-    pub(crate) bus_frequency_hz: u32,
 }
 
 impl TargetConfig {
-    /// Create a default configuration with the address of the MCU and the expected bus frequency.
+    /// Create a default configuration with the address of the MCU.
     ///
     /// The address should be specified unshifted. 7-bit addressing mode is used by default.
-    ///
-    /// If this is not known, use a lower bound in order to ensure that the correct timing
-    /// parameters are used.
-    pub const fn new(own_address: u16, bus_frequency_hz: u32) -> Self {
+    pub const fn new(own_address: u16) -> Self {
         TargetConfig {
             own_address_mode: AddressMode::AddressMode7bit,
             own_address,
             secondary_address: None,
             secondary_address_mask_bits: None,
-            bus_frequency_hz,
         }
     }
 
