@@ -47,7 +47,7 @@ macro_rules! gpio {
 
             $(
                 #[doc=concat!("P", $port_id, $i, " pin")]
-                pub type $PXi<MODE = crate::gpio::Analog> = crate::gpio::Pin<$port_id, $i, MODE>;
+                pub type $PXi<MODE = crate::gpio::Analog, const INT: bool = false> = crate::gpio::Pin<$port_id, $i, MODE, INT>;
 
                 $(
                     impl<MODE> crate::gpio::marker::IntoAf<$A> for $PXi<MODE> { }

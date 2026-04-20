@@ -58,6 +58,9 @@ mod convert;
 mod dynamic;
 mod erased;
 mod exti;
+
+#[cfg(feature = "futures")]
+mod future;
 mod gpio_def;
 mod hal;
 mod partially_erased;
@@ -71,7 +74,7 @@ pub use dynamic::{Dynamic, DynamicPin};
 pub use embedded_hal::digital::PinState;
 
 pub use erased::{EPin, ErasedPin};
-pub use exti::ExtiPin;
+pub use exti::{ExtiExt, ExtiPin, ExtiedPin};
 pub use gpio_def::*;
 pub use partially_erased::{PEPin, PartiallyErasedPin};
 
@@ -264,10 +267,16 @@ pub type AF15<Otype = PushPull> = Alternate<15, Otype>;
 /// - `MODE` is one of the pin modes (see [Modes](crate::gpio#modes) section).
 /// - `P` is port name: `A` for GPIOA, `B` for GPIOB, etc.
 /// - `N` is pin number: from `0` to `15`.
-pub struct Pin<const P: char, const N: u8, MODE = Analog> {
+/// - `INT` is true of the pin is configured for EXTI interrupt
+pub struct Pin<
+    const P: char,
+    const N: u8,
+    MODE = Analog,
+    const INT: bool = false,
+> {
     _mode: PhantomData<MODE>,
 }
-impl<const P: char, const N: u8, MODE> Pin<P, N, MODE> {
+impl<const P: char, const N: u8, MODE, const INT: bool> Pin<P, N, MODE, INT> {
     const fn new() -> Self {
         Self { _mode: PhantomData }
     }
@@ -412,7 +421,7 @@ impl<const P: char, const N: u8, MODE> From<Pin<P, N, MODE>>
     }
 }
 
-impl<const P: char, const N: u8, MODE> Pin<P, N, MODE> {
+impl<const P: char, const N: u8, MODE, const INT: bool> Pin<P, N, MODE, INT> {
     /// Set the output of the pin regardless of its mode.
     /// Primarily used to set the output value of the pin
     /// before changing its mode to an output to avoid
