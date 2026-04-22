@@ -41,12 +41,13 @@ fn main() -> ! {
     info!("");
 
     let own_addr: u16 = 0x18;
-    let bus_freq_hz: u32 = 100_000;
+    let bus_freq_hz = 100.kHz();
     let mut i2c = dp
         .I2C2
         .i2c_target_only(
             (scl, sda),
-            TargetConfig::new(own_addr, bus_freq_hz),
+            bus_freq_hz,
+            TargetConfig::new(own_addr),
             ccdr.peripheral.I2C2,
             &ccdr.clocks,
         )
