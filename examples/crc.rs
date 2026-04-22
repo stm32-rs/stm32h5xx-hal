@@ -4,6 +4,7 @@
 
 #[macro_use]
 mod utilities;
+use cortex_m_semihosting::debug;
 use stm32h5xx_hal::{
     crc::{Config, ReverseInput},
     pac,
@@ -84,5 +85,7 @@ fn main() -> ! {
     crc.update(CHECK_DATA);
     let r4 = crc.finish();
     assert_eq!(r4, 0x0000_d853);
-    loop {}
+    loop {
+        debug::exit(debug::EXIT_SUCCESS)
+    }
 }
