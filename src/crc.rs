@@ -260,7 +260,7 @@ impl ReverseInput {
 
 /// A CRC polynomial.
 ///
-/// The STM32H7 CRC unit only supports odd polynomials, and the constructors
+/// The STM32 CRC unit only supports odd polynomials, and the constructors
 /// will check to ensure the polynomial is odd unless the `_unchecked` variants
 /// are used.
 ///
