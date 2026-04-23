@@ -167,6 +167,8 @@ pub struct Config {
     output_xor: u32,
 }
 
+/// Configuration for the CRC unit. Use builder methods to set options, then apply with
+/// [`Crc::set_config()`](Crc::set_config).
 impl Config {
     pub const fn new() -> Self {
         Self {
@@ -178,11 +180,13 @@ impl Config {
         }
     }
 
+    /// Set the polynomial to be used in the CRC calculation.
     pub const fn polynomial(mut self, poly: Polynomial) -> Self {
         self.poly = poly;
         self
     }
 
+    /// Builder helper for creating a polynomial from a raw value.
     pub const fn polynomial_bits32(
         self,
         poly: u32,
@@ -193,16 +197,19 @@ impl Config {
         }
     }
 
+    /// Set whether to reverse the input bits, and how to reverse them if so.
     pub const fn reverse_input(mut self, reverse: ReverseInput) -> Self {
         self.reverse_input = reverse;
         self
     }
 
+    /// Set whether to reverse the output bits.
     pub const fn reverse_output(mut self, reversed: bool) -> Self {
         self.reverse_output = reversed;
         self
     }
 
+    /// Set the initial value of the CRC calculation.
     pub const fn initial_value(mut self, value: u32) -> Self {
         self.initial = value;
         self
@@ -222,16 +229,24 @@ impl Default for Config {
     }
 }
 
-/// Configuration value for control of the reversal of the bit order of the input data
+/// Configuration value for control of the reversal of the bit order of the input data.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ReverseInput {
     NoReverse,
+    /// Each input byte has its bits reversed. `0x1A2B3C4D` becomes `0x58D43CB2`.
     ByteReverse,
+    /// Bits reversed by half-word. `0x1A2B3C4D` becomes `0xD458B23C`.
     HalfWordReverse,
+    /// Bits reversed by word. `0x1A2B3C4D` becomes `0xB23CD458`.
     WordReverse,
 }
 
+/// How to reverse the input bits.
+///
+/// ST refers to this as both 'reversal' and 'inversion'. If a CRC calls for
+/// 'reflection' it most likely wants [`BitReversal::Byte`] and output reversal
+/// enabled.
 impl ReverseInput {
     const fn as_reg(self) -> REV_IN {
         match self {
@@ -243,12 +258,24 @@ impl ReverseInput {
     }
 }
 
-/// A CRC polynomial with explicit width.
+/// A CRC polynomial.
+///
+/// The STM32H7 CRC unit only supports odd polynomials, and the constructors
+/// will check to ensure the polynomial is odd unless the `_unchecked` variants
+/// are used.
+///
+/// Even polynomials are essentially never used in CRCs, so you most likely
+/// don't need to worry about this if you aren't creating your own algorithm.
+///
+/// A polynomial being even means that the least significant bit is `0`
+/// in the polynomial's normal representation.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Polynomial(Poly);
 
 impl Polynomial {
+    /// Create a 7-bit polynomial. Returns an error if the polynomial passed
+    /// has the MSB set or is even.
     pub const fn bits7(poly: u8) -> Result<Self, PolynomialError> {
         if poly > 0x7F {
             return Err(PolynomialError::TooLarge);
@@ -259,6 +286,7 @@ impl Polynomial {
         Ok(Self(Poly::B7(poly)))
     }
 
+    /// Create an 8-bit polynomial. Returns an error if the polynomial passed is even.
     pub const fn bits8(poly: u8) -> Result<Self, PolynomialError> {
         if poly.is_multiple_of(2) {
             return Err(PolynomialError::EvenPoly);
@@ -266,6 +294,7 @@ impl Polynomial {
         Ok(Self(Poly::B8(poly)))
     }
 
+    /// Create a 16-bit polynomial. Returns an error if the polynomial passed is even.
     pub const fn bits16(poly: u16) -> Result<Self, PolynomialError> {
         if poly.is_multiple_of(2) {
             return Err(PolynomialError::EvenPoly);
@@ -273,6 +302,7 @@ impl Polynomial {
         Ok(Self(Poly::B16(poly)))
     }
 
+    /// Create a 32-bit polynomial. Returns an error if the polynomial passed is even.
     pub const fn bits32(poly: u32) -> Result<Self, PolynomialError> {
         if poly.is_multiple_of(2) {
             return Err(PolynomialError::EvenPoly);
@@ -280,22 +310,31 @@ impl Polynomial {
         Ok(Self(Poly::B32(poly)))
     }
 
+    /// Create a 7-bit polynomial. If the polynomial passed is even the
+    /// CRC unit will give incorrect results.
     pub const fn bits7_unchecked(poly: u8) -> Self {
         Self(Poly::B7(poly))
     }
 
+    /// Create an 8-bit polynomial. If the polynomial passed is even the
+    /// CRC unit will give incorrect results.
     pub const fn bits8_unchecked(poly: u8) -> Self {
         Self(Poly::B8(poly))
     }
 
+    /// Create an 16-bit polynomial. If the polynomial passed is even the
+    /// CRC unit will give incorrect results.
     pub const fn bits16_unchecked(poly: u16) -> Self {
         Self(Poly::B16(poly))
     }
 
+    /// Create a 32-bit polynomial. If the polynomial passed is even the
+    /// CRC unit will give incorrect results.
     pub const fn bits32_unchecked(poly: u32) -> Self {
         Self(Poly::B32(poly))
     }
 
+    /// Return POLYSIZE register value.
     const fn polysize(self) -> POLYSIZE {
         match self.0 {
             Poly::B7(_) => POLYSIZE::Polysize7,
@@ -305,6 +344,7 @@ impl Polynomial {
         }
     }
 
+    /// Return the polynomial value to be written to the POL register
     const fn pol(self) -> u32 {
         match self.0 {
             Poly::B7(pol) | Poly::B8(pol) => pol as u32,
@@ -313,6 +353,7 @@ impl Polynomial {
         }
     }
 
+    /// Return mask for output XOR according to size.
     const fn xor_mask(self) -> u32 {
         match self.0 {
             Poly::B7(_) => 0x7F,
@@ -338,10 +379,15 @@ enum Poly {
     B32(u32),
 }
 
+/// Errors generated when trying to create invalid polynomials.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum PolynomialError {
+    /// Tried to create an even polynomial.
+    /// The hardware CRC unit only supports odd polynomials.
     EvenPoly,
+    /// Tried to create a 7-bit polynomial with an 8-bit number
+    /// (greater than `0x7F`).
     TooLarge,
 }
 
