@@ -89,6 +89,12 @@ pub mod gpdma;
 pub mod serial;
 
 #[cfg(feature = "device-selected")]
+pub mod signature;
+
+#[cfg(feature = "device-selected")]
+pub mod flash;
+
+#[cfg(feature = "device-selected")]
 mod sealed {
     pub trait Sealed {}
 }
