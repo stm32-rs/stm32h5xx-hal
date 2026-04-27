@@ -137,18 +137,6 @@ impl Crc {
         result
     }
 
-    /// Write to the independent data register
-    /// This is "temporary storage location for four bytes" and is not affected by reset
-    /// It is also not used in the CRC calculation
-    pub fn set_idr(&mut self, value: u32) {
-        self.reg.idr().write(|w| w.idr().set(value));
-    }
-
-    /// Read from the independent data register
-    pub fn get_idr(&self) -> u32 {
-        self.reg.idr().read().idr().bits()
-    }
-
     /// Reset the CRC unit and set the value of the data register back to default
     /// This does not change the configuration
     pub fn reset(&mut self) {
