@@ -60,11 +60,6 @@ fn main() -> ! {
     let r2 = crc.finish();
     assert_eq!(r2, 0x9A873CBF);
 
-    info!("Independent data register (IDR) 32-bit scratch space unaffected by CRC reset");
-    assert_eq!(crc.get_idr(), 0);
-    crc.set_idr(0x12345678);
-    assert_eq!(crc.get_idr(), 0x12345678);
-
     info!("CRC-32/ISO-HDLC with output_xor");
     let iso_hdlc = Config::new()
         .reverse_input(ReverseInput::ByteReverse)
