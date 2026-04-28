@@ -3,7 +3,9 @@
 use core::ptr;
 use core::sync::atomic::{fence, Ordering};
 
-use embedded_storage::nor_flash::{NorFlash, NorFlashError, NorFlashErrorKind};
+use embedded_storage::nor_flash::{
+    check_erase, NorFlash, NorFlashError, NorFlashErrorKind,
+};
 use embedded_storage::Region;
 
 use crate::stm32::FLASH;
@@ -23,32 +25,29 @@ impl NorFlashError for Error {
     }
 }
 
-/// Result of `FlashExt::unlocked()`
+/// Erase and program operations for unlocked user flash
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
 /// use stm32h5xx_hal::pac::Peripherals;
-/// use stm32h5xx_hal::flash::{FlashExt, LockedFlash, UnlockedFlashBank};
+/// use stm32h5xx_hal::flash::FlashExt;
 /// use embedded_storage::nor_flash::NorFlash;
 ///
 /// let dp = Peripherals::take().unwrap();
-/// let (mut flash, _) = dp.FLASH.split();
+/// let mut flash = dp.FLASH.flash();
+/// let mut user_flash = flash.user_flash();
+/// let mut unlocked = user_flash.unlocked();
 ///
-/// // Unlock flash for writing
-/// let mut unlocked_flash = flash.unlocked();
+/// // Erase the second 8 kB sector (bank 0, sector 1).
+/// NorFlash::erase(&mut unlocked, 1 * 8 * 1024, 2 * 8 * 1024).unwrap();
 ///
-/// // Erase the second 128 KB sector.
-/// NorFlash::erase(&mut unlocked_flash, 128 * 1024, 256 * 1024).unwrap();
+/// // Write 16 bytes (one 128-bit flash word) at the start of sector 1.
+/// let buf = [0u8; 16];
+/// NorFlash::write(&mut unlocked, 1 * 8 * 1024, &buf).unwrap();
 ///
-/// // Write some data at the start of the second 128 KB sector.
-/// let buf = [0u8; 64];
-/// NorFlash::write(&mut unlocked_flash, 128 * 1024, &buf).unwrap();
-///
-/// // Lock flash by dropping
-/// drop(unlocked_flash);
+/// // Flash is re-locked when `unlocked` is dropped.
 /// ```
-
 impl UnlockedUserFlash<'_> {
     /// Erase a flash sector
     ///
@@ -64,6 +63,7 @@ impl UnlockedUserFlash<'_> {
         }
 
         self.flash.wait_ready();
+        self.flash.prepare_operation()?;
 
         // Clear all the error flags due to previous programming/erase
         self.flash.clear_error_flags();
@@ -153,7 +153,16 @@ impl NorFlash for UnlockedUserFlash<'_> {
     const ERASE_SIZE: usize = super::SECTOR_SIZE;
 
     fn erase(&mut self, from: u32, to: u32) -> Result<(), Self::Error> {
+        check_erase(self, from, to).map_err(|e| match e {
+            NorFlashErrorKind::NotAligned => Error::NotAligned,
+            NorFlashErrorKind::OutOfBounds => Error::OutOfBounds,
+            _ => Error::Other,
+        })?;
+
         let mut current = from;
+        if to > from {
+            return Err(Error::OutOfBounds);
+        }
 
         for (bank, sector) in self.region().bank_sector_iter() {
             if sector.contains(current) {
@@ -169,11 +178,23 @@ impl NorFlash for UnlockedUserFlash<'_> {
     }
 
     fn write(&mut self, offset: u32, bytes: &[u8]) -> Result<(), Self::Error> {
+        if !(offset as usize).is_multiple_of(Self::WRITE_SIZE)
+            || !bytes.len().is_multiple_of(Self::WRITE_SIZE)
+        {
+            return Err(Error::NotAligned);
+        }
+        if offset as usize + bytes.len() > self.region().size() {
+            return Err(Error::OutOfBounds);
+        }
         self.program(offset, bytes.iter())
     }
 }
 
 impl<'a> UnlockedOtpData<'a> {
+    /// Programs a single 16-bit word into an OTP `slot`.
+    ///
+    /// Returns an error if the hardware signals a programming fault.
+    /// Panics if `slot >= OTP_NUM_SLOTS`.
     pub fn program_value(
         &mut self,
         slot: usize,
@@ -183,7 +204,10 @@ impl<'a> UnlockedOtpData<'a> {
 
         self.flash.wait_ready();
 
-        // TODO: Check if block is locked
+        if self.is_otp_block_locked(self.region().block(slot)) {
+            return Err(Error::WriteProtection);
+        }
+
         {
             // Unlock programming and ensure it is locked again on drop (at the end of this block)
             let _request = self.flash.programming_request()?;
@@ -211,6 +235,11 @@ impl<'a> UnlockedOtpData<'a> {
         self.read_value(slot)
     }
 
+    /// Programs consecutive 16-bit OTP words starting at `start_slot`.
+    ///
+    /// Each word in `words` is written to `start_slot + n` and verified before
+    /// the next word is written.  Returns an error on the first hardware fault.
+    /// Panics if `start_slot >= OTP_NUM_SLOTS` or any derived slot is out of range.
     pub fn program_sequence<I>(
         &mut self,
         start_slot: usize,
@@ -231,6 +260,12 @@ impl<'a> UnlockedOtpData<'a> {
             self.flash.clear_error_flags();
 
             for (slot, word) in words.enumerate() {
+                if self
+                    .is_otp_block_locked(self.region().block(start_slot + slot))
+                {
+                    return Err(Error::WriteProtection);
+                }
+
                 // Ensure that the write to the CR register (device memory) is
                 // committed *before* we write to flash (normal memory). This
                 // prevents ProgrammingSequence errors
@@ -255,6 +290,10 @@ impl<'a> UnlockedOtpData<'a> {
         Ok(())
     }
 
+    /// Programs raw bytes into the OTP region starting at byte `offset`.
+    ///
+    /// Returns an error on the first hardware fault.
+    /// Panics if `offset` is unaligned or any derived address exceeds the OTP region.
     pub fn program_bytes<I>(
         &mut self,
         offset: usize,
@@ -279,6 +318,11 @@ impl<'a> UnlockedOtpData<'a> {
             let mut count = 0usize;
 
             while bytes.peek().is_some() {
+                let slot = offset / 2 + count;
+                if self.is_otp_block_locked(self.region().block(slot)) {
+                    return Err(Error::WriteProtection);
+                }
+
                 // Ensure that the write to the CR register (device memory) is
                 // committed *before* we write to flash (normal memory). This
                 // prevents ProgrammingSequence errors
@@ -307,9 +351,16 @@ impl<'a> UnlockedOtpData<'a> {
 
         Ok(())
     }
+
+    fn is_otp_block_locked(&self, block: usize) -> bool {
+        let bits = self.flash.otpblr_cur().read().lockbl().bits();
+        (bits >> block) & 1 != 0
+    }
 }
 
 impl<'a> UnlockedOptionBytes<'a> {
+    /// Applies option-byte changes via a closure and starts the option-byte
+    /// programming sequence (`OPTSTRT`).
     pub fn modify<F>(&mut self, f: F) -> Result<(), Error>
     where
         F: FnOnce(&mut FLASH),

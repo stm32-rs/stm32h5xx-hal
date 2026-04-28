@@ -7,16 +7,13 @@
 //!
 //! # Examples
 //!
-//! - [Flash example](https://github.com/stm32-rs/stm32h7xx-hal/blob/master/examples/flash.rs)
+//! - examples/flash.rs - erasing, reading, writing
 //!
 //! # Supported devices
 //!
-//! | Reference Manual | Flash Sizes | Banks | Sector Size
-//! | --- | --- | --- | ---
-//! | RM0433 | 128kB, 1MB, 2MB | One or Two | 128kB
-//! | RM0399 | 1MB, 2MB | Two | 128kB
-//! | RM0455 | 128kB, 1MB, 2MB | One or Two | 8kB
-//! | RM0468 | 128kB, 512kB, 1MB | One | 128kB
+//! | Reference Manual | Flash Size | Banks | Sector Size |
+//! | --- | --- | --- | --- |
+//! | RM0492 | 128 kB | Two (64 kB each) | 8 kB |
 
 use core::iter;
 use core::ops::Deref;
@@ -33,13 +30,13 @@ pub const SECTOR_SIZE: usize = 0x2000; // 8kB
 // The maximum write size is 128 bits
 const USER_FLASH_MAX_WRITE_SIZE: usize = 16; // 128-bit
 
-/// Flash erase/program error. From RM0433 Rev 7. Section 4.7
+/// Flash erase/program error. From RM0492 Rev 3. Section 7.8
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy)]
 pub enum Error {
-    // Flash is busy
+    /// Flash is busy
     Busy,
-    // Previously incomplete operation
+    /// Previously incomplete operation
     Incomplete,
     /// The arguments are not properly aligned
     NotAligned,
@@ -52,7 +49,7 @@ pub enum Error {
     /// Application software wrote several times to the same byte
     Strobe,
     /// Write operation was attempted before the completion of the previous
-    /// write operation OR a wrap burst request overlaps two or more 256-bit
+    /// write operation OR a wrap burst request overlaps two or more 128-bit
     /// flash-word addresses
     Inconsistency,
     /// Error occurred during an option byte change operation
@@ -231,7 +228,11 @@ impl Flash {
         self.optkeyr()
             .write(|w| unsafe { w.optkey().bits(UNLOCK_KEY2) });
 
-        Ok(())
+        if self.optcr().read().optlock().bit_is_set() {
+            Err(Error::OptionByteChange)
+        } else {
+            Ok(())
+        }
     }
 
     fn lock_option_bytes(&self) {
@@ -263,15 +264,24 @@ impl Flash {
         Ok(ProgrammingRequest { flash: self })
     }
 
+    /// Returns a read-only handle to the user flash region.
+    ///
+    /// `FLASH_NSCR` is locked on return. Call [`LockedUserFlash::unlocked`] to
+    /// obtain a write guard that re-locks `FLASH_NSCR` on drop.
     pub fn user_flash(&mut self) -> LockedUserFlash<'_> {
-        self.unlock_configuration();
+        self.lock_configuration();
         LockedUserFlash::new(self)
     }
 
-    pub fn otp_data(&mut self) -> Result<LockedOtpData<'_>, Error> {
-        Ok(LockedOtpData::new(self))
+    /// Returns a read-only handle to the one time programmable data region.
+    pub fn otp_data(&mut self) -> LockedOtpData<'_> {
+        LockedOtpData::new(self)
     }
 
+    /// Unlocks the option byte control register (`FLASH_OPTCR`).
+    ///
+    /// Returns an [`UnlockedOptionBytes`] guard that re-locks `FLASH_OPTCR` on drop.
+    /// Returns `Err(Error::OptionByteChange)` if the hardware rejects the key sequence.
     pub fn unlock_option_bytes(
         &mut self,
     ) -> Result<UnlockedOptionBytes<'_>, Error> {
@@ -279,6 +289,7 @@ impl Flash {
         Ok(UnlockedOptionBytes { flash: self })
     }
 
+    /// Consumes the [`Flash`] wrapper and returns the raw `FLASH` peripheral.
     pub fn free(self) -> FLASH {
         self.flash
     }
@@ -287,8 +298,6 @@ impl Flash {
 struct ProgrammingRequest<'a> {
     flash: &'a Flash,
 }
-
-impl<'a> ProgrammingRequest<'a> {}
 
 impl<'a> Drop for ProgrammingRequest<'a> {
     fn drop(&mut self) {
@@ -301,14 +310,18 @@ pub struct LockedUserFlash<'a> {
 }
 
 impl<'a> LockedUserFlash<'a> {
-    pub fn new(flash: &'a mut Flash) -> Self {
+    pub(crate) fn new(flash: &'a mut Flash) -> Self {
         Self { flash }
     }
 
+    /// Returns the [`UserFlashRegion`] descriptor for this flash region.
     pub fn region(&self) -> UserFlashRegion {
         UserFlashRegion
     }
 
+    /// Unlocks `FLASH_NSCR` and returns an [`UnlockedUserFlash`] write guard.
+    ///
+    /// `FLASH_NSCR` is re-locked when the guard is dropped.
     pub fn unlocked(&mut self) -> UnlockedUserFlash<'_> {
         self.flash.unlock_configuration();
         UnlockedUserFlash::new(self.flash)
@@ -320,10 +333,11 @@ pub struct UnlockedUserFlash<'a> {
 }
 
 impl<'a> UnlockedUserFlash<'a> {
-    pub fn new(flash: &'a mut Flash) -> Self {
+    pub(crate) fn new(flash: &'a mut Flash) -> Self {
         Self { flash }
     }
 
+    /// Returns the [`UserFlashRegion`] descriptor for this flash region.
     pub fn region(&self) -> UserFlashRegion {
         UserFlashRegion
     }
@@ -366,7 +380,7 @@ impl UserFlashRegion {
     pub fn bank_sector_iter(
         &self,
     ) -> impl Iterator<Item = (usize, FlashSector)> {
-        // Second user main memory bank always starts at an offset of 0x10_0000
+        // Bank 1 starts at offset 0x0, bank 2 starts at bank_size() (64 kB = 0x1_0000 for H503)
         iter::repeat(0)
             .zip(FlashSectorIterator::new(0, 0, self.bank_size() as u32))
             .chain(iter::repeat(1).zip(FlashSectorIterator::new(
@@ -376,10 +390,13 @@ impl UserFlashRegion {
             )))
     }
 
+    /// Size in bytes of one physical flash bank
     pub fn bank_size(&self) -> usize {
         self.size() / 2
     }
 
+    /// Returns the byte offset from [`USER_FLASH_BASE_ADDRESS`] where `bank` starts.
+    /// Bank 0 is at offset 0; bank 1 immediately follows at `bank_size()` bytes.
     pub fn bank_offset(&self, bank: u32) -> u32 {
         match bank {
             0 => 0,
@@ -388,6 +405,7 @@ impl UserFlashRegion {
         }
     }
 
+    /// Returns the bank number that contains `offset`.
     pub fn bank(&self, offset: u32) -> u32 {
         offset / self.bank_size() as u32
     }
@@ -406,12 +424,17 @@ impl nor_flash::ReadNorFlash for LockedUserFlash<'_> {
         bytes: &mut [u8],
     ) -> Result<(), Self::Error> {
         let offset = offset as usize;
+        let end = offset.checked_add(bytes.len()).ok_or(Error::OutOfBounds)?;
+
+        if end > self.region().size() {
+            return Err(Error::OutOfBounds);
+        }
 
         let ptr = self.region().base_address() as *const _;
         let data =
             unsafe { core::slice::from_raw_parts(ptr, self.region().size()) };
 
-        bytes.copy_from_slice(&data[offset..offset + bytes.len()]);
+        bytes.copy_from_slice(&data[offset..end]);
         Ok(())
     }
 
@@ -433,12 +456,17 @@ impl nor_flash::ReadNorFlash for UnlockedUserFlash<'_> {
         bytes: &mut [u8],
     ) -> Result<(), Self::Error> {
         let offset = offset as usize;
+        let end = offset.checked_add(bytes.len()).ok_or(Error::OutOfBounds)?;
+
+        if end > self.region().size() {
+            return Err(Error::OutOfBounds);
+        }
 
         let ptr = self.region().base_address() as *const _;
         let data =
             unsafe { core::slice::from_raw_parts(ptr, self.region().size()) };
 
-        bytes.copy_from_slice(&data[offset..offset + bytes.len()]);
+        bytes.copy_from_slice(&data[offset..end]);
         Ok(())
     }
 
@@ -472,8 +500,9 @@ impl OtpDataRegion {
         OTP_BASE_ADDRESS + OTP_SIZE as u32
     }
 
-    fn block(&self, slot: usize) -> usize {
-        slot / OTP_SLOTS_PER_BLOCK
+    /// OTP block number containing `slot`.
+    pub fn block(&self, slot: usize) -> usize {
+        slot / 32
     }
 }
 
@@ -482,16 +511,24 @@ impl<'a> LockedOtpData<'a> {
         Self { flash }
     }
 
+    /// Returns the [`OtpDataRegion`] descriptor for the OTP area.
     pub fn region(&self) -> OtpDataRegion {
         OtpDataRegion
     }
 
+    /// Reads the 16-bit OTP word at `slot`.
+    ///
+    /// Panics if `slot` is out of range.
     pub fn read_value(&mut self, slot: usize) -> Result<u16, Error> {
         let ptr = self.region().base_address() as *const u16;
         let ptr = unsafe { ptr.add(slot) };
         assert!(ptr < self.region().region_end_address() as *const u16);
         Ok(unsafe { core::ptr::read_volatile(ptr) })
     }
+
+    /// Unlocks `FLASH_NSCR` and returns an [`UnlockedOtpData`] write guard.
+    ///
+    /// `FLASH_NSCR` is re-locked when the guard is dropped.
     pub fn unlocked(&mut self) -> UnlockedOtpData<'_> {
         self.flash.unlock_configuration();
         UnlockedOtpData::new(self.flash)
@@ -507,10 +544,14 @@ impl<'a> UnlockedOtpData<'a> {
         Self { flash }
     }
 
+    /// Returns the [`OtpDataRegion`] descriptor for the OTP area.
     pub fn region(&self) -> OtpDataRegion {
         OtpDataRegion
     }
 
+    /// Reads the 16-bit OTP word at `slot`.
+    ///
+    /// Panics if `slot` is out of range.
     pub fn read_value(&mut self, slot: usize) -> Result<u16, Error> {
         let ptr = self.region().base_address() as *const u16;
         let ptr = unsafe { ptr.add(slot) };
@@ -539,38 +580,14 @@ impl<'a> Drop for UnlockedOptionBytes<'a> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn flash_dual_bank_1m() {
-        let mut sectors = flash_sectors(1 * 1024 * 1024);
-
-        #[rustfmt::skip]
-        assert_eq!(sectors.next(), Some(FlashSector { number: 0, offset: 0x00000 }));
-        #[rustfmt::skip]
-        assert_eq!(sectors.next(), Some(FlashSector { number: 1, offset: 0x20000 }));
-        #[rustfmt::skip]
-        assert_eq!(sectors.next(), Some(FlashSector { number: 2, offset: 0x40000 }));
-        #[rustfmt::skip]
-        assert_eq!(sectors.next(), Some(FlashSector { number: 3, offset: 0x60000 }));
-        // Offsets 0x80000 - 0x100000 not available
-        #[rustfmt::skip]
-        assert_eq!(sectors.next(), Some(FlashSector { number: 0, offset: 0x100000 }));
-        #[rustfmt::skip]
-        assert_eq!(sectors.next(), Some(FlashSector { number: 1, offset: 0x120000 }));
-        #[rustfmt::skip]
-        assert_eq!(sectors.next(), Some(FlashSector { number: 2, offset: 0x140000 }));
-        #[rustfmt::skip]
-        assert_eq!(sectors.next(), Some(FlashSector { number: 3, offset: 0x160000 }));
-        // Offsets 0x180000 - 0x200000 not available
-        assert_eq!(sectors.next(), None);
-    }
-
-    /// Test the memory layout of the STM32H750xB and STM32H730
+    /// Test the memory layout of the STM32H503
     #[test]
     fn flash_single_bank_128k() {
-        let mut sectors = flash_sectors(128 * 1024);
-
-        #[rustfmt::skip]
-        assert_eq!(sectors.next(), Some(FlashSector { number: 0, offset: 0x00000 }));
-        assert_eq!(sectors.next(), None);
+        let iter = FlashSectorIterator::new(0, 0, 128 * 1024);
+        let sectors: Vec<FlashSector> = iter.collect();
+        let last = sectors.last().unwrap();
+        assert_eq!(sectors.len(), 16);
+        assert_eq!(last.number, 15);
+        assert_eq!(last.offset, 15 * SECTOR_SIZE as u32);
     }
 }

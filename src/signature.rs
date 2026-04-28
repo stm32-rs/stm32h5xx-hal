@@ -2,15 +2,22 @@
 //!
 //! (stored in system flash memory)
 
-/// Uniqure Device ID register
+/// Unique Device ID register
+/// 96 bits of unique device ID, factory programmed and read-only
 pub struct Uid;
 
-const UID_PTR: *const u8 = 0x08FF_F800 as _;
+const UID_PTR: *const u32 = 0x08FF_F800 as _;
 
 impl Uid {
-    /// Read Unique Device ID
-    pub fn read() -> &'static [u8; 12] {
-        unsafe { &*UID_PTR.cast::<[u8; 12]>() }
+    /// Read Unique Device ID as three 32-bit words.
+    pub fn read() -> [u32; 3] {
+        unsafe {
+            [
+                core::ptr::read_volatile(UID_PTR),
+                core::ptr::read_volatile(UID_PTR.add(1)),
+                core::ptr::read_volatile(UID_PTR.add(2)),
+            ]
+        }
     }
 }
 

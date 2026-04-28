@@ -7,7 +7,7 @@
 #![no_main]
 #![no_std]
 
-use cortex_m_rt::{entry, exception, interrupt};
+use cortex_m_rt::{entry, exception};
 use cortex_m_semihosting::debug;
 use stm32h5xx_hal::{pac, prelude::*};
 

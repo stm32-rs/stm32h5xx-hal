@@ -11,7 +11,7 @@
 #![no_main]
 #![no_std]
 
-use cortex_m_rt::{entry, exception};
+use cortex_m_rt::entry;
 use cortex_m_semihosting::debug;
 use stm32h5xx_hal::{pac, prelude::*};
 
@@ -37,7 +37,7 @@ fn main() -> ! {
 
     let mut flash = dp.FLASH.flash();
 
-    let mut otp = flash.otp_data().unwrap();
+    let mut otp = flash.otp_data();
     info!("Reading data slot 0");
 
     // Reading unprogrammed OTP generates an ECC error, which triggers an NMI. The NMI handler
