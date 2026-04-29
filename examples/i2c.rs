@@ -42,9 +42,13 @@ fn main() -> ! {
     info!("stm32h5xx-hal example - I2C");
     info!("");
 
-    let mut i2c =
-        dp.I2C2
-            .i2c((scl, sda), 100.kHz(), ccdr.peripheral.I2C2, &ccdr.clocks);
+    let bus_freq_hz = 100.kHz();
+    let mut i2c = dp.I2C2.i2c(
+        (scl, sda),
+        bus_freq_hz,
+        ccdr.peripheral.I2C2,
+        &ccdr.clocks,
+    );
 
     // The STM32H503 NUCLEO board does not have any I2C peripherals, so put in the address of
     // whatever peripheral you connect

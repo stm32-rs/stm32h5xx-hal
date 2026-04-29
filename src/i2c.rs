@@ -61,8 +61,10 @@
 //!
 //! let mut i2c_target = dp.I2C1.i2c_target_only(
 //!     (scl, sda),
-//!     TargetConfig::new(own_addr, bus_freq),
+//!     bus_freq,
+//!     TargetConfig::new(own_addr),
 //!     ccdr.peripheral.I2C1,
+//!     &ccdr.clocks,
 //! );
 //! ```
 //!
@@ -125,8 +127,10 @@
 //!
 //! let mut i2c = dp.I2C1.i2c_controller_target(
 //!     (scl, sda),
-//!     TargetConfig::new(own_addr, bus_freq),
+//!     bus_freq,
+//!     TargetConfig::new(own_addr),
 //!     ccdr.peripheral.I2C1,
+//!     &ccdr.clocks,
 //! );
 //! ```
 //!
@@ -147,9 +151,9 @@
 //! - [I2C Target simple example](https://github.com/stm32-rs/stm32h5xx-hal/blob/master/examples/i2c_target.rs)
 //! - [I2C Target with manual ACK control](https://github.com/stm32-rs/stm32h5xx-hal/blob/master/examples/i2c_target_manual_ack.rs)
 
-use core::iter;
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
+use core::{fmt, iter};
 
 use crate::rcc::{CoreClocks, ResetEnable};
 
@@ -367,27 +371,28 @@ impl<I2C> Inner<I2C> {
 
 pub trait I2cExt<I2C: Instance>: Sized {
     /// Create a I2c instance that is capable of Controller operation only
-    fn i2c<P: Pins<I2C>>(
+    fn i2c<P: Pins<I2C>, T: IntoI2cTiming>(
         self,
         _pins: P,
-        frequency: Hertz,
+        timing: T,
         rec: I2C::Rec,
         clocks: &CoreClocks,
     ) -> I2c<I2C, SingleRole>;
 
     /// Create a I2c instance that is capable of Controller operation only.
     /// This will not check that the pins are properly configured.
-    fn i2c_unchecked(
+    fn i2c_unchecked<T: IntoI2cTiming>(
         self,
-        frequency: Hertz,
+        timing: T,
         rec: I2C::Rec,
         clocks: &CoreClocks,
     ) -> I2c<I2C, SingleRole>;
 
     /// Create an I2cTarget instance capable of Target operation only
-    fn i2c_target_only<P: Pins<I2C>>(
+    fn i2c_target_only<P: Pins<I2C>, T: IntoI2cTiming>(
         self,
         _pins: P,
+        timing: T,
         target_config: TargetConfig,
         rec: I2C::Rec,
         clocks: &CoreClocks,
@@ -395,8 +400,9 @@ pub trait I2cExt<I2C: Instance>: Sized {
 
     /// Create an I2cTarget instance capable of Target operation only.
     /// This will not check that the pins are properly configured.
-    fn i2c_target_only_unchecked<P: Pins<I2C>>(
+    fn i2c_target_only_unchecked<T: IntoI2cTiming>(
         self,
+        timing: T,
         target_config: TargetConfig,
         rec: I2C::Rec,
         clocks: &CoreClocks,
@@ -404,10 +410,10 @@ pub trait I2cExt<I2C: Instance>: Sized {
 
     /// Create an I2c instance that can switch roles to a I2cTarget to perform
     /// Target operations
-    fn i2c_controller_target<P: Pins<I2C>>(
+    fn i2c_controller_target<P: Pins<I2C>, T: IntoI2cTiming>(
         self,
         _pins: P,
-        frequency: Hertz,
+        timing: T,
         target_config: TargetConfig,
         rec: I2C::Rec,
         clocks: &CoreClocks,
@@ -416,9 +422,9 @@ pub trait I2cExt<I2C: Instance>: Sized {
     /// Create an I2c instance that can switch roles to a I2cTarget to perform
     /// Target operations.
     /// This will not check that the pins are properly configured.
-    fn i2c_controller_target_unchecked(
+    fn i2c_controller_target_unchecked<T: IntoI2cTiming>(
         self,
-        frequency: Hertz,
+        timing: T,
         target_config: TargetConfig,
         rec: I2C::Rec,
         clocks: &CoreClocks,
@@ -426,63 +432,95 @@ pub trait I2cExt<I2C: Instance>: Sized {
 }
 
 impl<I2C: Instance> I2cExt<I2C> for I2C {
-    fn i2c<P: Pins<I2C>>(
+    fn i2c<P: Pins<I2C>, T: IntoI2cTiming>(
         self,
         _pins: P,
-        frequency: Hertz,
+        timing: T,
         rec: I2C::Rec,
         clocks: &CoreClocks,
     ) -> I2c<I2C, SingleRole> {
-        I2c::new(self, frequency, None::<TargetConfig>, rec, clocks)
+        I2c::new(
+            self,
+            timing.into_i2c_timing(I2C::clock(clocks).raw()),
+            None::<TargetConfig>,
+            rec,
+        )
     }
 
-    fn i2c_unchecked(
+    fn i2c_unchecked<T: IntoI2cTiming>(
         self,
-        frequency: Hertz,
+        timing: T,
         rec: I2C::Rec,
         clocks: &CoreClocks,
     ) -> I2c<I2C, SingleRole> {
-        I2c::new(self, frequency, None::<TargetConfig>, rec, clocks)
+        I2c::new(
+            self,
+            timing.into_i2c_timing(I2C::clock(clocks).raw()),
+            None::<TargetConfig>,
+            rec,
+        )
     }
 
-    fn i2c_target_only<P: Pins<I2C>>(
+    fn i2c_target_only<P: Pins<I2C>, T: IntoI2cTiming>(
         self,
         _pins: P,
+        timing: T,
         config: TargetConfig,
         rec: I2C::Rec,
         clocks: &CoreClocks,
     ) -> I2cTarget<I2C, AutoAck, SingleRole> {
-        I2cTarget::new(self, config, rec, clocks)
+        I2cTarget::new(
+            self,
+            timing.into_i2c_timing(I2C::clock(clocks).raw()),
+            config,
+            rec,
+        )
     }
 
-    fn i2c_target_only_unchecked<P: Pins<I2C>>(
+    fn i2c_target_only_unchecked<T: IntoI2cTiming>(
         self,
+        timing: T,
         target_config: TargetConfig,
         rec: I2C::Rec,
         clocks: &CoreClocks,
     ) -> I2cTarget<I2C, AutoAck, SingleRole> {
-        I2cTarget::new(self, target_config, rec, clocks)
+        I2cTarget::new(
+            self,
+            timing.into_i2c_timing(I2C::clock(clocks).raw()),
+            target_config,
+            rec,
+        )
     }
 
-    fn i2c_controller_target<P: Pins<I2C>>(
+    fn i2c_controller_target<P: Pins<I2C>, T: IntoI2cTiming>(
         self,
         _pins: P,
-        frequency: Hertz,
+        timing: T,
         target_config: TargetConfig,
         rec: I2C::Rec,
         clocks: &CoreClocks,
     ) -> I2c<I2C, SwitchRole> {
-        I2c::new(self, frequency, Some(target_config), rec, clocks)
+        I2c::new(
+            self,
+            timing.into_i2c_timing(I2C::clock(clocks).raw()),
+            Some(target_config),
+            rec,
+        )
     }
 
-    fn i2c_controller_target_unchecked(
+    fn i2c_controller_target_unchecked<T: IntoI2cTiming>(
         self,
-        frequency: Hertz,
+        timing: T,
         target_config: TargetConfig,
         rec: I2C::Rec,
         clocks: &CoreClocks,
     ) -> I2c<I2C, SwitchRole> {
-        I2c::new(self, frequency, Some(target_config), rec, clocks)
+        I2c::new(
+            self,
+            timing.into_i2c_timing(I2C::clock(clocks).raw()),
+            Some(target_config),
+            rec,
+        )
     }
 }
 
@@ -629,47 +667,35 @@ fn configure_target_addresses<I2C: Instance>(i2c: &I2C, config: TargetConfig) {
 impl<I2C: Instance, R> I2c<I2C, R> {
     /// Create and initialise a new I2C peripheral.
     ///
-    /// The frequency of the I2C bus clock is specified by `frequency`.
-    ///
     /// # Panics
     ///
-    /// Panics if the ratio between `frequency` and the i2c_ker_ck
+    /// Panics if the ratio between the bus frequency and the i2c_ker_ck
     /// is out of bounds. The acceptable range is [4, 8192].
     ///
-    /// Panics if the `frequency` is too fast. The maximum is 1MHz.
+    /// Panics if the bus frequency is too fast. The maximum is 1MHz.
     pub fn new(
         i2c: I2C,
-        frequency: Hertz,
+        timing: I2cTiming,
         config: Option<TargetConfig>,
         rec: I2C::Rec,
-        clocks: &CoreClocks,
     ) -> Self {
         let _ = rec.enable().reset();
-
-        let freq: u32 = frequency.raw();
-
-        // Maximum f_SCL for Fast-mode Plus (Fm+)
-        assert!(freq <= 1_000_000);
-
-        let i2c_ker_ck: u32 = I2C::clock(clocks).raw();
 
         // Clear PE bit in I2C_CR1
         i2c.cr1().modify(|_, w| w.pe().disabled());
 
         // Configure timing
-        let (presc_reg, scll, sclh, sdadel, scldel) =
-            calc_timing_params(i2c_ker_ck, freq);
         i2c.timingr().write(|w| {
             w.presc()
-                .set(presc_reg)
+                .set(timing.presc)
                 .scll()
-                .set(scll)
+                .set(timing.scll)
                 .sclh()
-                .set(sclh)
+                .set(timing.sclh)
                 .sdadel()
-                .set(sdadel)
+                .set(timing.sdadel)
                 .scldel()
-                .set(scldel)
+                .set(timing.scldel)
         });
 
         if let Some(config) = config {
@@ -695,27 +721,23 @@ impl<I2C: Instance, R> I2c<I2C, R> {
 impl<I2C: Instance, A, R> I2cTarget<I2C, A, R> {
     fn new(
         i2c: I2C,
+        timing: I2cTiming,
         config: TargetConfig,
         rec: I2C::Rec,
-        clocks: &CoreClocks,
     ) -> Self {
         let _ = rec.enable().reset();
 
         // Clear PE bit in I2C_CR1
         i2c.cr1().modify(|_, w| w.pe().disabled());
 
-        let i2c_ker_ck: u32 = I2C::clock(clocks).raw();
-
         // Configure timing parameters for target mode
-        let (presc_reg, _, _, sdadel, scldel) =
-            calc_timing_params(i2c_ker_ck, config.bus_frequency_hz);
         i2c.timingr().write(|w| {
             w.presc()
-                .set(presc_reg)
+                .set(timing.presc)
                 .sdadel()
-                .set(sdadel)
+                .set(timing.sdadel)
                 .scldel()
-                .set(scldel)
+                .set(timing.scldel)
         });
 
         configure_target_addresses(&i2c, config);
@@ -884,8 +906,8 @@ impl<I2C: Instance> Inner<I2C> {
 /// [Read](I2c#impl-Read) and [Write](I2c#impl-Write)
 /// implementations.
 ///
-/// If a previous transcation is still in progress, then these
-/// methods will block until that transcation is complete. A
+/// If a previous transaction is still in progress, then these
+/// methods will block until that transaction is complete. A
 /// previous transaction can still be "in progress" up to 50% of a
 /// bus cycle after a ACK/NACK event. Otherwise these methods return
 /// immediately.
@@ -1615,9 +1637,110 @@ impl<I2C> I2cTarget<I2C, SwitchRole> {
     }
 }
 
+/// A raw u32 representation of the TIMINGR register, which can be converted into an I2cTiming struct.
+pub struct RawTimingr(pub u32);
+
+/// Represents the TIMINGR register and its associated timing parameters for an I2C peripheral.
+/// This can be instantiated from a constant calculated elsewhere (CubeMX or AN4235)
+/// or calculated at runtime from the peripheral clock and target bus frequency.
+#[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct I2cTiming {
+    presc: u8,
+    scldel: u8,
+    sdadel: u8,
+    sclh: u8,
+    scll: u8,
+}
+
+impl I2cTiming {
+    pub fn new(presc: u8, scldel: u8, sdadel: u8, sclh: u8, scll: u8) -> Self {
+        I2cTiming {
+            presc,
+            scldel,
+            sdadel,
+            sclh,
+            scll,
+        }
+    }
+}
+
+impl fmt::Display for I2cTiming {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let timingr = RawTimingr::from(*self);
+        write!(
+            f,
+            "TIMINGR: 0x{:08X} (PRESC: {}, SCLDEL: {}, SDADEL: {}, SCLH: {}, SCLL: {})",
+             timingr.0, self.presc, self.scldel, self.sdadel, self.sclh, self.scll
+        )
+    }
+}
+
+impl From<RawTimingr> for I2cTiming {
+    fn from(raw: RawTimingr) -> Self {
+        raw.into_i2c_timing(0)
+    }
+}
+
+impl From<I2cTiming> for RawTimingr {
+    fn from(timing: I2cTiming) -> Self {
+        let timingr = ((timing.presc as u32) << 28)
+            | ((timing.scldel as u32) << 20)
+            | ((timing.sdadel as u32) << 16)
+            | ((timing.sclh as u32) << 8)
+            | (timing.scll as u32);
+        RawTimingr(timingr)
+    }
+}
+
+/// A type that can be converted into [`I2cTiming`].
+///
+/// Implemented for:
+/// - [`I2cTiming`] — used as-is
+/// - [`RawTimingr`] — decoded from a raw TIMINGR register value (e.g. from STM32CubeMX)
+/// - [`Hertz`] — computes timing from the I2C kernel clock and the requested bus frequency
+pub trait IntoI2cTiming {
+    fn into_i2c_timing(self, ker_ck: u32) -> I2cTiming;
+}
+
+impl IntoI2cTiming for I2cTiming {
+    fn into_i2c_timing(self, _ker_ck: u32) -> I2cTiming {
+        self
+    }
+}
+
+impl IntoI2cTiming for RawTimingr {
+    fn into_i2c_timing(self, _ker_ck: u32) -> I2cTiming {
+        I2cTiming {
+            presc: ((self.0 >> 28) & 0x0F) as u8,
+            scldel: ((self.0 >> 20) & 0x0F) as u8,
+            sdadel: ((self.0 >> 16) & 0x0F) as u8,
+            sclh: ((self.0 >> 8) & 0xFF) as u8,
+            scll: (self.0 & 0xFF) as u8,
+        }
+    }
+}
+
+impl IntoI2cTiming for Hertz {
+    fn into_i2c_timing(self, ker_ck: u32) -> I2cTiming {
+        let (presc, scll, sclh, sdadel, scldel) =
+            calc_timing_params(ker_ck, self.raw());
+        I2cTiming {
+            presc,
+            scldel,
+            sdadel,
+            sclh,
+            scll,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::i2c::calc_timing_params;
+    use crate::i2c::{
+        calc_timing_params, I2cTiming, IntoI2cTiming, RawTimingr,
+    };
+    use crate::time::Hertz;
 
     /// Runs a timing testcase over PCLK and I2C clock ranges
     fn i2c_timing_testcase<F>(f: F)
@@ -1827,5 +1950,28 @@ mod tests {
             assert!(scldel <= 15);
             assert!(t_scldel >= t_scldel_minimum);
         });
+    }
+
+    #[test]
+    fn test_i2c_timing_constructor() {
+        let timingr: u32 = 0x20901030;
+        let presc = 2;
+        let scldel = 9;
+        let sdadel = 0;
+        let sclh = 16;
+        let scll = 48;
+        let raw_timing = RawTimingr(timingr);
+        let t1 = raw_timing.into_i2c_timing(0);
+        assert_eq!(t1.presc, presc);
+        assert_eq!(t1.scldel, scldel);
+        assert_eq!(t1.sdadel, sdadel);
+        assert_eq!(t1.sclh, sclh);
+        assert_eq!(t1.scll, scll);
+
+        let t2 = I2cTiming::new(presc, scldel, sdadel, sclh, scll);
+        assert_eq!(timingr, RawTimingr::from(t2).0);
+
+        let t3 = Hertz::from_raw(200_000).into_i2c_timing(250_000_000);
+        assert_eq!(RawTimingr::from(t3).0, 0xD0F51C39);
     }
 }
