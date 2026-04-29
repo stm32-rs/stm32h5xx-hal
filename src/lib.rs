@@ -89,14 +89,13 @@ pub mod gpdma;
 pub mod serial;
 
 #[cfg(feature = "device-selected")]
-<<<<<<< la/flash
 pub mod signature;
 
 #[cfg(feature = "device-selected")]
 pub mod flash;
-=======
+
+#[cfg(feature = "device-selected")]
 pub mod crc;
->>>>>>> master
 
 #[cfg(feature = "device-selected")]
 mod sealed {
