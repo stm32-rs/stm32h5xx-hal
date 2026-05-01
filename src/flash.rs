@@ -270,10 +270,10 @@ impl Flash {
 
     /// Returns a read-only handle to the user flash region.
     ///
-    /// `FLASH_NSCR` is locked on return. Call [`LockedUserFlash::unlocked`] to
-    /// obtain a write guard that re-locks `FLASH_NSCR` on drop.
+    /// `FLASH_NSCR` is locked (by hardware reset state and the `Drop` impl on
+    /// [`UnlockedUserFlash`]). Call [`LockedUserFlash::unlocked`] to obtain a
+    /// write guard that re-locks `FLASH_NSCR` on drop.
     pub fn user_flash(&mut self) -> LockedUserFlash<'_> {
-        self.lock_configuration();
         LockedUserFlash::new(self)
     }
 
