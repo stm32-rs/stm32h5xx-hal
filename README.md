@@ -47,7 +47,7 @@ of support for peripherals is shown in the table below.
 | ADC        | ❌ | [#35](https://github.com/stm32-rs/stm32h5xx-hal/issues/35) | |
 | PWM        | ❌ | - | |
 | Rtc        | ❌ | - | |
-| Flash      | ❌ | - | |
+| Flash      | 🚧 | - | |
 
 ## Minimum supported Rust version
 

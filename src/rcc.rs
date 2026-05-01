@@ -503,7 +503,12 @@ impl Rcc {
         let flash = unsafe { &(*FLASH::ptr()) };
         // Adjust flash wait states
         flash.acr().write(|w| unsafe {
-            w.wrhighfreq().bits(progr_delay).latency().bits(wait_states)
+            w.wrhighfreq().bits(progr_delay).latency().bits(wait_states);
+            if wait_states > 0 {
+                w.prften().set_bit()
+            } else {
+                w.prften().clear_bit()
+            }
         });
         while flash.acr().read().latency().bits() != wait_states {}
     }
