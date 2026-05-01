@@ -8,12 +8,16 @@
 //! # Examples
 //!
 //! - examples/flash.rs - erasing, reading, writing
+//! - examples/flash_option_bytes.rs - setting & reading option bytes
+//! - examples/flash.rs - erasing, reading, writing
 //!
 //! # Supported devices
 //!
-//! | Reference Manual | Flash Size | Banks | Sector Size |
-//! | --- | --- | --- | --- |
-//! | RM0492 | 128 kB | Two (64 kB each) | 8 kB |
+//! | Reference Manual | Devices | Flash Size | Banks | Sector Size |
+//! | --- | --- | --- | --- | --- |
+//! | RM0492 | STM32H503 | 128 kB | Two (64 kB each) | 8 kB |
+//! | RM0481 | STM32H523/H533 | 256 kB | Two (128 kB each) | 8 kB |
+//! | RM0481 | STM32H562/H563/H573 | up to 2 MB | Two (up to 1 MB each) | 8 kB |
 
 use core::iter;
 use core::ops::Deref;
@@ -30,7 +34,7 @@ pub const SECTOR_SIZE: usize = 0x2000; // 8kB
 // The maximum write size is 128 bits
 const USER_FLASH_MAX_WRITE_SIZE: usize = 16; // 128-bit
 
-/// Flash erase/program error. From RM0492 Rev 3. Section 7.8
+/// Flash erase/program error.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy)]
 pub enum Error {
@@ -380,7 +384,7 @@ impl UserFlashRegion {
     pub fn bank_sector_iter(
         &self,
     ) -> impl Iterator<Item = (usize, FlashSector)> {
-        // Bank 1 starts at offset 0x0, bank 2 starts at bank_size() (64 kB = 0x1_0000 for H503)
+        // Bank 1 starts at offset 0x0, bank 2 starts at bank_size()
         iter::repeat(0)
             .zip(FlashSectorIterator::new(0, 0, self.bank_size() as u32))
             .chain(iter::repeat(1).zip(FlashSectorIterator::new(

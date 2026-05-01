@@ -28,7 +28,7 @@ fn main() -> ! {
     let _ = rcc.sys_ck(250.MHz()).freeze(pwrcfg, &dp.SBS);
 
     info!("");
-    info!("stm32h5xx-hal example - Flash erase, write and read");
+    info!("stm32h5xx-hal example - Flash Option Bytes");
     info!("");
 
     let mut flash = dp.FLASH.flash();
@@ -80,24 +80,5 @@ fn main() -> ! {
 
     loop {
         debug::exit(debug::EXIT_SUCCESS)
-    }
-}
-
-#[exception]
-unsafe fn NonMaskableInt() {
-    info!("NMI exception");
-    let flash = pac::FLASH::steal();
-    let eccdetr = flash.eccdetr().read();
-    if eccdetr.eccd().bit_is_set() {
-        let addr = eccdetr.addr_ecc().bits();
-        info!("ECC error address: 0x{:08X}", addr);
-        if eccdetr.otp_ecc().bit_is_set() {
-            info!("ECC error detected in OTP");
-        } else {
-            info!("ECC error detected in flash");
-        }
-
-        // Clear ECC error flag
-        flash.eccdetr().write(|w| w.eccd().set_bit());
     }
 }
