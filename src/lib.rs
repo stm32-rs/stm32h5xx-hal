@@ -95,6 +95,9 @@ pub mod signature;
 pub mod flash;
 
 #[cfg(feature = "device-selected")]
+pub mod timer;
+
+#[cfg(feature = "device-selected")]
 pub mod crc;
 
 #[cfg(feature = "device-selected")]
