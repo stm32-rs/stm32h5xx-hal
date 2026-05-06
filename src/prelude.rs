@@ -3,6 +3,7 @@
 pub use crate::crc::CrcExt as _stm32h5xx_hal_crc_CrcExt;
 pub use crate::delay::DelayExt as _stm32h5xx_hal_delay_DelayExt;
 pub use crate::dwt::DwtExt as _stm32h5xx_hal_delay_DwtExt;
+pub use crate::flash::FlashExt as _stm32h5xx_hal_flash_FlashExt;
 pub use crate::gpdma::GpdmaExt as _stm32h5xx_hal_gpdma_GpdmaExt;
 pub use crate::gpio::GpioExt as _stm32h5xx_hal_gpio_GpioExt;
 pub use crate::i2c::I2cExt as _stm32h5xx_hal_i2c_I2cExt;
