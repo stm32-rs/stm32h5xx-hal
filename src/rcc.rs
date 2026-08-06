@@ -116,7 +116,7 @@
 //! let ccdr = ...; // Returned by `freeze()`, see examples above
 //!
 //! // Runtime confirmation that hclk really is 200MHz
-//! assert_eq!(ccdr.clocks.hclk().raw(), 200_000_000);
+//! assert_eq!(ccdr.clocks.hclk().to_raw(), 200_000_000);
 //!
 //! // Panics if pll1_q_ck is not running
 //! let _ = ccdr.clocks.pll1_q_ck().unwrap();
@@ -262,9 +262,9 @@ macro_rules! pclk_setter {
             /// peripherals.
             #[must_use]
             pub fn $name(mut self, freq: Hertz) -> Self {
-                assert!(freq.raw() <= MAX_SYSCLK_FREQ_HZ,
+                assert!(freq.to_raw() <= MAX_SYSCLK_FREQ_HZ,
                     "Max frequency is {MAX_SYSCLK_FREQ_HZ}Hz");
-                self.config.$pclk = Some(freq.raw());
+                self.config.$pclk = Some(freq.to_raw());
                 self
             }
         )+
@@ -279,7 +279,7 @@ macro_rules! pll_setter {
                 /// Set the target clock frequency for PLL output
                 #[must_use]
                 pub fn $name(mut self, freq: Hertz) -> Self {
-                    self.config.$pll.$ck = Some(freq.raw());
+                    self.config.$pll.$ck = Some(freq.to_raw());
                     self
                 }
             )+
@@ -309,7 +309,7 @@ impl Rcc {
     /// external oscillator is not connected or it fails to start.
     #[must_use]
     pub fn use_hse(mut self, freq: Hertz) -> Self {
-        self.config.hse = Some(freq.raw());
+        self.config.hse = Some(freq.to_raw());
         self
     }
 
@@ -325,10 +325,10 @@ impl Rcc {
     #[must_use]
     pub fn sys_ck(mut self, freq: Hertz) -> Self {
         assert!(
-            freq.raw() <= MAX_SYSCLK_FREQ_HZ,
+            freq.to_raw() <= MAX_SYSCLK_FREQ_HZ,
             "Max frequency is {MAX_SYSCLK_FREQ_HZ}Hz"
         );
-        self.config.sys_ck = Some(freq.raw());
+        self.config.sys_ck = Some(freq.to_raw());
         self
     }
 
@@ -341,20 +341,20 @@ impl Rcc {
     /// Set peripheral clock frequency
     #[must_use]
     pub fn per_ck(mut self, freq: Hertz) -> Self {
-        self.config.per_ck = Some(freq.raw());
+        self.config.per_ck = Some(freq.to_raw());
         self
     }
 
     /// Set low speed external clock frequency
     pub fn lse_ck(mut self, freq: Hertz) -> Self {
-        self.config.lse = Some(freq.raw());
+        self.config.lse = Some(freq.to_raw());
         self
     }
 
     /// Set external AUDIOCLK frequency
     #[must_use]
     pub fn audio_ck(mut self, freq: Hertz) -> Self {
-        self.config.audio_ck = Some(freq.raw());
+        self.config.audio_ck = Some(freq.to_raw());
         self
     }
 
@@ -362,10 +362,10 @@ impl Rcc {
     #[must_use]
     pub fn hclk(mut self, freq: Hertz) -> Self {
         assert!(
-            freq.raw() <= MAX_SYSCLK_FREQ_HZ,
+            freq.to_raw() <= MAX_SYSCLK_FREQ_HZ,
             "Max frequency is {MAX_SYSCLK_FREQ_HZ}Hz"
         );
-        self.config.rcc_hclk = Some(freq.raw());
+        self.config.rcc_hclk = Some(freq.to_raw());
         self
     }
 
@@ -631,10 +631,10 @@ impl Rcc {
         let timpre = TIMPRE::DefaultX2;
 
         // Get AHB clock or sensible default
-        let rcc_hclk = self.config.rcc_hclk.unwrap_or(sys_ck.raw());
+        let rcc_hclk = self.config.rcc_hclk.unwrap_or(sys_ck.to_raw());
 
         // Estimate divisor
-        let (hpre_bits, hpre_div) = match sys_ck.raw().div_ceil(rcc_hclk) {
+        let (hpre_bits, hpre_div) = match sys_ck.to_raw().div_ceil(rcc_hclk) {
             0 => unreachable!(),
             1 => (HPRE::Div1, 1),
             2 => (HPRE::Div2, 2),
@@ -648,7 +648,7 @@ impl Rcc {
         };
 
         // Calculate real AHB clock
-        let rcc_hclk = sys_ck.raw() / hpre_div;
+        let rcc_hclk = sys_ck.to_raw() / hpre_div;
 
         // Calculate ppreN dividers and real rcc_pclkN frequencies
         ppre_calculate! {
@@ -663,7 +663,7 @@ impl Rcc {
             MCO1::Hsi => HSI,
             MCO1::Lse => unimplemented!(),
             MCO1::Hse => self.config.hse.unwrap(),
-            MCO1::Pll1Q => pll1_q_ck.unwrap().raw(),
+            MCO1::Pll1Q => pll1_q_ck.unwrap().to_raw(),
             MCO1::Hsi48 => HSI48,
         };
         let (mco_1_pre, mco1_ck) =
@@ -671,10 +671,10 @@ impl Rcc {
 
         let mco2_in = match self.config.mco2.source {
             // We set the required clock earlier, so can unwrap() here.
-            MCO2::Sysclk => sys_ck.raw(),
-            MCO2::Pll2P => pll2_p_ck.unwrap().raw(),
+            MCO2::Sysclk => sys_ck.to_raw(),
+            MCO2::Pll2P => pll2_p_ck.unwrap().to_raw(),
             MCO2::Hse => self.config.hse.unwrap(),
-            MCO2::Pll1P => pll1_p_ck.unwrap().raw(),
+            MCO2::Pll1P => pll1_p_ck.unwrap().to_raw(),
             MCO2::Csi => CSI,
             MCO2::Lsi => LSI,
         };

@@ -44,7 +44,7 @@ pub struct Delay {
 
 fn calc_ticks(ns: u32, hclk: u32) -> u32 {
     // Default is for SYSTICK to be fed by HCLK/8
-    let ticks: u64 = (SecsDurationU64::secs(1) * SYSTICK_HCLK_DIV).to_nanos();
+    let ticks: u64 = (SecsDurationU64::from_secs(1) * SYSTICK_HCLK_DIV).as_nanos();
     ((ns as u64 * hclk as u64) / ticks) as u32
 }
 
@@ -54,7 +54,7 @@ impl Delay {
         syst.set_clock_source(SystClkSource::External);
 
         Delay {
-            hclk_hz: clocks.hclk().raw(),
+            hclk_hz: clocks.hclk().to_raw(),
             syst,
         }
     }

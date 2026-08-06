@@ -31,12 +31,12 @@ fn main() -> ! {
     info!("");
 
     // HCLK
-    info!("hclk = {} Hz", ccdr.clocks.hclk().raw());
-    assert_eq!(ccdr.clocks.hclk().raw(), 250_000_000);
+    info!("hclk = {} Hz", ccdr.clocks.hclk().to_raw());
+    assert_eq!(ccdr.clocks.hclk().to_raw(), 250_000_000);
 
     // SYS_CK
-    info!("sys_ck = {} Hz", ccdr.clocks.sys_ck().raw());
-    assert_eq!(ccdr.clocks.sys_ck().raw(), 250_000_000);
+    info!("sys_ck = {} Hz", ccdr.clocks.sys_ck().to_raw());
+    assert_eq!(ccdr.clocks.sys_ck().to_raw(), 250_000_000);
 
     loop {
         cortex_m::asm::nop()

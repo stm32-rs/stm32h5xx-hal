@@ -441,7 +441,7 @@ impl<I2C: Instance> I2cExt<I2C> for I2C {
     ) -> I2c<I2C, SingleRole> {
         I2c::new(
             self,
-            timing.into_i2c_timing(I2C::clock(clocks).raw()),
+            timing.into_i2c_timing(I2C::clock(clocks).to_raw()),
             None::<TargetConfig>,
             rec,
         )
@@ -455,7 +455,7 @@ impl<I2C: Instance> I2cExt<I2C> for I2C {
     ) -> I2c<I2C, SingleRole> {
         I2c::new(
             self,
-            timing.into_i2c_timing(I2C::clock(clocks).raw()),
+            timing.into_i2c_timing(I2C::clock(clocks).to_raw()),
             None::<TargetConfig>,
             rec,
         )
@@ -471,7 +471,7 @@ impl<I2C: Instance> I2cExt<I2C> for I2C {
     ) -> I2cTarget<I2C, AutoAck, SingleRole> {
         I2cTarget::new(
             self,
-            timing.into_i2c_timing(I2C::clock(clocks).raw()),
+            timing.into_i2c_timing(I2C::clock(clocks).to_raw()),
             config,
             rec,
         )
@@ -486,7 +486,7 @@ impl<I2C: Instance> I2cExt<I2C> for I2C {
     ) -> I2cTarget<I2C, AutoAck, SingleRole> {
         I2cTarget::new(
             self,
-            timing.into_i2c_timing(I2C::clock(clocks).raw()),
+            timing.into_i2c_timing(I2C::clock(clocks).to_raw()),
             target_config,
             rec,
         )
@@ -502,7 +502,7 @@ impl<I2C: Instance> I2cExt<I2C> for I2C {
     ) -> I2c<I2C, SwitchRole> {
         I2c::new(
             self,
-            timing.into_i2c_timing(I2C::clock(clocks).raw()),
+            timing.into_i2c_timing(I2C::clock(clocks).to_raw()),
             Some(target_config),
             rec,
         )
@@ -517,7 +517,7 @@ impl<I2C: Instance> I2cExt<I2C> for I2C {
     ) -> I2c<I2C, SwitchRole> {
         I2c::new(
             self,
-            timing.into_i2c_timing(I2C::clock(clocks).raw()),
+            timing.into_i2c_timing(I2C::clock(clocks).to_raw()),
             Some(target_config),
             rec,
         )
@@ -1724,7 +1724,7 @@ impl IntoI2cTiming for RawTimingr {
 impl IntoI2cTiming for Hertz {
     fn into_i2c_timing(self, ker_ck: u32) -> I2cTiming {
         let (presc, scll, sclh, sdadel, scldel) =
-            calc_timing_params(ker_ck, self.raw());
+            calc_timing_params(ker_ck, self.to_raw());
         I2cTiming {
             presc,
             scldel,

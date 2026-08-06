@@ -501,8 +501,8 @@ impl<SPI: Instance, W: Word> Spi<SPI, W> {
             );
         }
 
-        let spi_freq = freq.raw();
-        let spi_ker_ck = clock.raw();
+        let spi_freq = freq.to_raw();
+        let spi_ker_ck = clock.to_raw();
         let mbr = calc_mbr(spi_ker_ck, spi_freq);
         self.spi().cfg1().modify(|_, w| {
             w.mbr()

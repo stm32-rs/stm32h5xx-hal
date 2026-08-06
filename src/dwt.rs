@@ -104,21 +104,21 @@ impl embedded_hal::delay::DelayNs for Delay {
     fn delay_ns(&mut self, ns: u32) {
         // Convert ns to ticks
         let start = DWT::cycle_count();
-        let ticks = (ns as u64 * self.clock.raw() as u64) / 1_000_000_000;
+        let ticks = (ns as u64 * self.clock.to_raw() as u64) / 1_000_000_000;
         Delay::delay_ticks(start, ticks);
     }
 
     fn delay_us(&mut self, us: u32) {
         // Convert us to ticks
         let start = DWT::cycle_count();
-        let ticks = (us as u64 * self.clock.raw() as u64) / 1_000_000;
+        let ticks = (us as u64 * self.clock.to_raw() as u64) / 1_000_000;
         Delay::delay_ticks(start, ticks);
     }
 
     fn delay_ms(&mut self, ms: u32) {
         // Convert ms to ticks
         let start = DWT::cycle_count();
-        let ticks = (ms as u64 * self.clock.raw() as u64) / 1_000;
+        let ticks = (ms as u64 * self.clock.to_raw() as u64) / 1_000;
         Delay::delay_ticks(start, ticks);
     }
 }
@@ -196,23 +196,23 @@ impl ClockDuration {
     }
     /// Returns calculated milliseconds as integer
     pub fn as_millis(self) -> u64 {
-        self.ticks as u64 * 1_000 / self.clock.raw() as u64
+        self.ticks as u64 * 1_000 / self.clock.to_raw() as u64
     }
     /// Returns calculated microseconds as integer
     pub fn as_micros(self) -> u64 {
-        self.ticks as u64 * 1_000_000 / self.clock.raw() as u64
+        self.ticks as u64 * 1_000_000 / self.clock.to_raw() as u64
     }
     /// Returns calculated nanoseconds as integer
     pub fn as_nanos(self) -> u64 {
-        self.ticks as u64 * 1_000_000_000 / self.clock.raw() as u64
+        self.ticks as u64 * 1_000_000_000 / self.clock.to_raw() as u64
     }
     /// Return calculated seconds as 32-bit float
     pub fn as_secs_f32(self) -> f32 {
-        self.ticks as f32 / self.clock.raw() as f32
+        self.ticks as f32 / self.clock.to_raw() as f32
     }
     /// Return calculated seconds as 64-bit float
     pub fn as_secs_f64(self) -> f64 {
-        self.ticks as f64 / self.clock.raw() as f64
+        self.ticks as f64 / self.clock.to_raw() as f64
     }
 }
 
