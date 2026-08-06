@@ -32,7 +32,7 @@ fn main() -> ! {
     let gpiob = dp.GPIOB.split(ccdr.peripheral.GPIOB);
 
     let mut delay = Delay::new(cp.SYST, &ccdr.clocks);
-    let duration = SecsDurationU32::secs(1).to_millis();
+    let duration = SecsDurationU32::from_secs(1).as_millis();
 
     // Configure the SCL and the SDA pin for our I2C bus
     let scl = gpiob.pb5.into_alternate_open_drain();

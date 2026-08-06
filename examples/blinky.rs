@@ -28,7 +28,7 @@ fn main() -> ! {
     let mut led = gpioa.pa5.into_push_pull_output();
 
     let mut delay = Delay::new(cp.SYST, &ccdr.clocks);
-    let duration = SecsDurationU32::secs(1).to_millis();
+    let duration = SecsDurationU32::from_secs(1).as_millis();
 
     loop {
         led.set_low();

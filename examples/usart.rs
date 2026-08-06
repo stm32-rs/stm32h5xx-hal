@@ -49,7 +49,7 @@ fn main() -> ! {
         .unwrap();
 
     let mut delay = Delay::new(cp.SYST, &ccdr.clocks);
-    let duration = MilliSeconds::secs(1).to_millis();
+    let duration = MilliSeconds::from_secs(1).as_millis();
     // Echo what is received on the USART
     let read = &mut [0u8; 6];
     let mut count = 1;
