@@ -134,7 +134,7 @@ impl<TIM: Instance> Timer<TIM> {
         // Enable and reset peripheral to a clean state
         let _ = prec.enable().reset();
 
-        let clk = TIM::clock(clocks).raw();
+        let clk = TIM::clock(clocks).to_raw();
 
         Timer { clk, tim }
     }

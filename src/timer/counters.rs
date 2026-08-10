@@ -69,7 +69,7 @@ impl<TIM: Instance + Basic> Timeout<TIM> {
         T: Into<Hertz>,
     {
         let frequency: Hertz = frequency.into();
-        let ticks = self.clk / frequency.raw();
+        let ticks = self.clk / frequency.to_raw();
         self.start(ticks);
     }
 
@@ -85,7 +85,7 @@ impl<TIM: Instance + Basic> Timeout<TIM> {
     {
         let timeout: NanoSeconds = timeout_ns.into();
         let clk = Hertz::from_raw(self.clk);
-        let clk_period: NanoSeconds = clk.into_duration();
+        let clk_period: NanoSeconds = clk.to_duration();
 
         let ticks = timeout / clk_period;
         self.start(ticks);
@@ -157,7 +157,7 @@ impl<TIM: Instance + Basic> Tick<TIM> {
     /// clock. (ie. specifying 300kHz with a 1MHz kernel clock will
     /// result in a tick frequency of 1MHz/3 = 333kHz)
     fn set_tick_frequency(&mut self, frequency: Hertz) {
-        let div = self.clk / frequency.raw();
+        let div = self.clk / frequency.to_raw();
 
         // TODO: This only works for frequencies high enough to result in a 16-bit divisor. Consider removing
         let psc = u16::try_from(div - 1).unwrap();

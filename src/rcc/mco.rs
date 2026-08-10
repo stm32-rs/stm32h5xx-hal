@@ -155,7 +155,7 @@ macro_rules! mco1_setters {
                 #[must_use]
                 pub fn $mco_setter(mut self, freq: Hertz) -> Self {
                     self.config.mco1.source = MCO1::$source;
-                    self.config.mco1.frequency = Some(freq.raw());
+                    self.config.mco1.frequency = Some(freq.to_raw());
                     self
                 }
             )+
@@ -184,7 +184,7 @@ macro_rules! mco2_setters {
                 #[must_use]
                 pub fn $mco_setter(mut self, freq: Hertz) -> Self {
                     self.config.mco2.source = MCO2::$source;
-                    self.config.mco2.frequency = Some(freq.raw());
+                    self.config.mco2.frequency = Some(freq.to_raw());
                     self
                 }
             )+
